@@ -1,7 +1,5 @@
 import type { MortgageProvider } from './types';
 import type { RatesCache } from './rate-schema';
-import { asnHypotheek } from './asn-hypotheek';
-import { bespaarhypotheek } from './bespaar-hypotheek';
 import { createProviderFromCache } from './rate-engine';
 import ratesCacheRaw from './data/rates-cache.json';
 
@@ -28,10 +26,7 @@ function isWoninghypotheek(labelName: string): boolean {
 // Bouw providers op uit cache of fallback
 function buildProviders(): Record<string, MortgageProvider> {
   if (!ratesCache || !ratesCache.providers || ratesCache.providers.length === 0) {
-    return {
-      asn: asnHypotheek,
-      bespaar: bespaarhypotheek,
-    };
+    return {};
   }
 
   const result: Record<string, MortgageProvider> = {};
