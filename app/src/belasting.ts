@@ -14,7 +14,7 @@ const SCHIJF1_GRENS = 38_883;
 const SCHIJF1_TARIEF = 0.3575;
 const SCHIJF2_GRENS = 78_426;
 const SCHIJF2_TARIEF = 0.3756;
-const SCHIJF3_TARIEF = 0.4950;
+const SCHIJF3_TARIEF = 0.495;
 
 // Maximaal aftrekpercentage eigenwoningregeling 2026
 export const HRA_MAX_TARIEF = 0.3756;
@@ -63,10 +63,10 @@ function berekenArbeidskorting(arbeidsinkomen: number): number {
     return 996 + (arbeidsinkomen - AK_GRENS1) * 0.31009;
   }
   if (arbeidsinkomen <= AK_GRENS3) {
-    return 5_300 + (arbeidsinkomen - AK_GRENS2) * 0.01950;
+    return 5_300 + (arbeidsinkomen - AK_GRENS2) * 0.0195;
   }
   if (arbeidsinkomen <= AK_GRENS4) {
-    return Math.max(0, AK_MAX - (arbeidsinkomen - AK_GRENS3) * 0.06510);
+    return Math.max(0, AK_MAX - (arbeidsinkomen - AK_GRENS3) * 0.0651);
   }
   return 0;
 }

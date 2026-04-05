@@ -1,5 +1,6 @@
 import type { MortgageProvider } from './types';
 import type { CachedProvider } from './rate-schema';
+import { vindDichtstbijzijnde } from './utils';
 
 /**
  * Bepaal de LTV-klasse key op basis van LTV percentage en NHG status.
@@ -31,19 +32,6 @@ function getRateKey(energielabel: string, ltv: number, heeftNHG: boolean): strin
 }
 
 /**
- * Vind de dichtstbijzijnde beschikbare rentevaste periode (in maanden).
- */
-function vindDichtstbijzijndePeriode(
-  gevraagdJaren: number,
-  beschikbaarMaanden: number[],
-): number {
-  const gevraagdMaanden = gevraagdJaren * 12;
-  return beschikbaarMaanden.reduce((prev, curr) =>
-    Math.abs(curr - gevraagdMaanden) < Math.abs(prev - gevraagdMaanden) ? curr : prev
-  );
-}
-
-/**
  * Maak een MortgageProvider van gecachte API-data.
  */
 export function createProviderFromCache(data: CachedProvider): MortgageProvider {
@@ -58,9 +46,9 @@ export function createProviderFromCache(data: CachedProvider): MortgageProvider 
 
   // Converteer maanden naar jaren voor de interface
   const beschikbarePeriodes = beschikbaarMaanden
-    .filter(m => m > 0)
-    .map(m => m / 12)
-    .filter(j => Number.isInteger(j));
+    .filter((m) => m > 0)
+    .map((m) => m / 12)
+    .filter((j) => Number.isInteger(j));
 
   if (beschikbaarMaanden.includes(0)) {
     beschikbarePeriodes.unshift(0);
@@ -75,15 +63,17 @@ export function createProviderFromCache(data: CachedProvider): MortgageProvider 
 
   return {
     id,
-    naam: data.providerName === data.labelName
-      ? data.labelName
-      : `${data.providerName} — ${data.labelName}`,
+    naam: data.providerName === data.labelName ? data.labelName : `${data.providerName} — ${data.labelName}`,
     bank: data.providerName,
     beschikbarePeriodes,
     laatstBijgewerkt: undefined,
-    beschikbareLtvKlassen: [...new Set(
-      Object.keys(data.rates).map(k => k.split(':')[1]).filter(Boolean)
-    )],
+    beschikbareLtvKlassen: [
+      ...new Set(
+        Object.keys(data.rates)
+          .map((k) => k.split(':')[1])
+          .filter(Boolean),
+      ),
+    ],
 
     berekenRente({ ltv, heeftNHG, energielabel, rentevastePeriode }) {
       // Zoek de rateKey: energielabel + LTV-klasse
@@ -109,7 +99,7 @@ export function createProviderFromCache(data: CachedProvider): MortgageProvider 
 
       if (beschikbaar.length === 0) return 0;
 
-      const periodeMaanden = vindDichtstbijzijndePeriode(rentevastePeriode, beschikbaar);
+      const periodeMaanden = vindDichtstbijzijnde(rentevastePeriode * 12, beschikbaar);
       return ratesForCombo[periodeMaanden] ?? 0;
     },
   };
