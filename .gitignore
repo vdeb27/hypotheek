@@ -1,0 +1,17 @@
+# Dependencies
+app/node_modules/
+
+# Build output
+app/dist/
+
+# Persoonlijke configuratie (bevat financiele gegevens)
+app/src/user-config.ts
+
+# Bronbestanden rentetarieven
+*.pdf
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
