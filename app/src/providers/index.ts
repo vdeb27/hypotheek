@@ -1,24 +1,28 @@
-import { asnHypotheek } from './asn-hypotheek';
-import { bespaarhypotheek } from './bespaarhypotheek';
-import { createProviderFromCache } from './rate-engine';
 import type { MortgageProvider } from './types';
 import type { RatesCache } from './rate-schema';
+import { asnHypotheek } from './asn-hypotheek';
+import { bespaarhypotheek } from './bespaar-hypotheek';
+import { createProviderFromCache } from './rate-engine';
+import ratesCacheRaw from './data/rates-cache.json';
 
 export type { MortgageProvider } from './types';
-
-// Vite importeert JSON synchroon als module
-import ratesCacheRaw from './data/rates-cache.json';
-const ratesCache = ratesCacheRaw as unknown as RatesCache;
+const ratesCache = ratesCacheRaw as RatesCache;
 
 // Labels die geen reguliere woninghypotheken zijn
 const EXCLUDED_LABELS = [
-  'bedrijfsruimte', 'vastgoed', 'verhuur', 'investering', 'woonboot',
-  'verzilver', 'levenslangrente', '(prof)',
+  'bedrijfsruimte',
+  'vastgoed',
+  'verhuur',
+  'investering',
+  'woonboot',
+  'verzilver',
+  'levenslangrente',
+  '(prof)',
 ];
 
 function isWoninghypotheek(labelName: string): boolean {
   const lower = labelName.toLowerCase();
-  return !EXCLUDED_LABELS.some(kw => lower.includes(kw));
+  return !EXCLUDED_LABELS.some((kw) => lower.includes(kw));
 }
 
 // Bouw providers op uit cache of fallback

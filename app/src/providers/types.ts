@@ -4,12 +4,7 @@ export interface MortgageProvider {
   bank: string;
   beschikbarePeriodes: number[];
 
-  berekenRente(params: {
-    ltv: number;
-    heeftNHG: boolean;
-    energielabel: string;
-    rentevastePeriode: number;
-  }): number;
+  berekenRente(params: { ltv: number; heeftNHG: boolean; energielabel: string; rentevastePeriode: number }): number;
 
   afsluitkosten?: number;
   laatstBijgewerkt?: string; // ISO date van laatste data-update

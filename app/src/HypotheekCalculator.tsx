@@ -5,6 +5,189 @@ import config from './user-config';
 import { berekenHuishoudNettoMaand, HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven, berekenWaterschapJaar } from './gemeente-tarieven';
 
+// Bereken totale rente over de looptijd (pure functie)
+function berekenTotaleRente(
+  hypotheekBedrag: number,
+  rentePercentage: number,
+  looptijdJaren: number,
+  hypotheekType: string,
+): {
+  totaleRente: number;
+  totaleBetalingen: number;
+  rentePerPeriode: { jaren: number; rente: number }[];
+} {
+  const maandRente = rentePercentage / 100 / 12;
+  const aantalMaanden = looptijdJaren * 12;
+  let totaleRente = 0;
+  let restschuld = hypotheekBedrag;
+  const rentePerPeriode: { jaren: number; rente: number }[] = [];
+  let periodeRente = 0;
+
+  for (let maand = 1; maand <= aantalMaanden; maand++) {
+    const renteDezeM = restschuld * maandRente;
+    totaleRente += renteDezeM;
+    periodeRente += renteDezeM;
+
+    if (hypotheekType === 'annuitair') {
+      const annuiteitFactor =
+        (maandRente * Math.pow(1 + maandRente, aantalMaanden)) / (Math.pow(1 + maandRente, aantalMaanden) - 1);
+      const maandlast = hypotheekBedrag * annuiteitFactor;
+      const aflossing = maandlast - renteDezeM;
+      restschuld -= aflossing;
+    } else {
+      restschuld -= hypotheekBedrag / aantalMaanden;
+    }
+
+    if (maand % 60 === 0) {
+      rentePerPeriode.push({ jaren: maand / 12, rente: periodeRente });
+      periodeRente = 0;
+    }
+  }
+
+  return { totaleRente, totaleBetalingen: hypotheekBedrag + totaleRente, rentePerPeriode };
+}
+
+// Context voor jaarlijkse berekening (pure functie)
+interface JaarContext {
+  startJaar: number;
+  brutoJaarJij: number;
+  brutoJaarPartner: number;
+  promotieJaar: number | null;
+  promotieOpslag: number;
+  jijMinderWerkenJaar: number | null;
+  partnerMinderWerkenJaar: number | null;
+  jijUrenNaMinderWerken: number;
+  partnerUrenNaMinderWerken: number;
+  jijMaxUren: number;
+  partnerMaxUren: number;
+  woningwaarde: number;
+  woningIndexatie: number;
+  hypotheekType: string;
+  gemeenteData: {
+    ozbPercentage: number;
+    rioolheffingJaar: number;
+    afvalstoffenheffingJaar: number;
+    waterschap: import('./gemeente-tarieven').WaterschapTarieven;
+  };
+  opstalverzekeringMaand: number;
+  onderhoudspercentage: number;
+}
+
+function berekenJaarSituatiePure(jaar: number, hypotheekBedrag: number, rente: number, ctx: JaarContext) {
+  const jarenSindsStart = jaar - ctx.startJaar;
+
+  const indexering = Math.pow(1.02, jarenSindsStart); // 2% per jaar
+
+  let jijBasis = ctx.brutoJaarJij * indexering;
+  const partnerBasis = ctx.brutoJaarPartner * indexering;
+
+  // Promotie-opslag
+  if (ctx.promotieJaar && jaar >= ctx.promotieJaar) {
+    jijBasis *= 1 + ctx.promotieOpslag / 100;
+  }
+
+  // Werkuren aanpassen indien minder werken
+  const jijWerktMinder = ctx.jijMinderWerkenJaar && jaar >= ctx.jijMinderWerkenJaar;
+  const partnerWerktMinder = ctx.partnerMinderWerkenJaar && jaar >= ctx.partnerMinderWerkenJaar;
+  const jijUren = jijWerktMinder ? ctx.jijUrenNaMinderWerken : ctx.jijMaxUren;
+  const partnerUren = partnerWerktMinder ? ctx.partnerUrenNaMinderWerken : ctx.partnerMaxUren;
+
+  // Bruto inkomen naar rato van uren
+  const jijBrutoJaar = jijBasis * (jijUren / ctx.jijMaxUren);
+  const partnerBrutoJaar = partnerBasis * (partnerUren / ctx.partnerMaxUren);
+  const jijMaandloon = jijBrutoJaar / 12;
+  const partnerMaandloon = partnerBrutoJaar / 12;
+
+  const totaalBrutoJaar = jijBrutoJaar + partnerBrutoJaar;
+
+  // === HYPOTHEEK & WOONLASTEN ===
+  const totaalAfgelost = (hypotheekBedrag / 30) * jarenSindsStart;
+  const restschuld = hypotheekBedrag - totaalAfgelost;
+  const woningwaardeNu = ctx.woningwaarde * Math.pow(1 + ctx.woningIndexatie, jarenSindsStart);
+
+  // Eigenwoningforfait (0.35% van WOZ-waarde)
+  const eigenwoningforfait = woningwaardeNu * 0.0035;
+
+  const hraPercentage = HRA_MAX_TARIEF;
+
+  // Maandelijkse rente en aflossing
+  const maandRente = rente / 100 / 12;
+  let brutoMaandlast: number;
+
+  if (ctx.hypotheekType === 'annuitair') {
+    const annuiteitFactor = (maandRente * Math.pow(1 + maandRente, 360)) / (Math.pow(1 + maandRente, 360) - 1);
+    brutoMaandlast = hypotheekBedrag * annuiteitFactor;
+  } else {
+    const maandAflossing = hypotheekBedrag / 360;
+    brutoMaandlast = maandAflossing + restschuld * maandRente;
+  }
+
+  // Netto maandlast na hypotheekrenteaftrek
+  const jaarlijkseRente = restschuld * (rente / 100);
+  const hraVoordeel = Math.max(0, jaarlijkseRente * hraPercentage - eigenwoningforfait * hraPercentage) / 12;
+  const nettoMaandlast = brutoMaandlast - hraVoordeel;
+
+  // Eigen vermogen
+  const eigenVermogen = woningwaardeNu - restschuld;
+
+  // Netto inkomen (progressieve belasting + heffingskortingen, per persoon)
+  const nettoInkomenMaand = berekenHuishoudNettoMaand(jijBrutoJaar, partnerBrutoJaar);
+
+  // === EXTRA WOONLASTEN ===
+  const ozbJaar = woningwaardeNu * (ctx.gemeenteData.ozbPercentage / 100);
+  const waterschapJaar = berekenWaterschapJaar(ctx.gemeenteData.waterschap, woningwaardeNu);
+  const gemeentelijkeLastenJaar =
+    ozbJaar + waterschapJaar + ctx.gemeenteData.rioolheffingJaar + ctx.gemeenteData.afvalstoffenheffingJaar;
+
+  const verzekeringenJaar = ctx.opstalverzekeringMaand * 12;
+  const onderhoudJaar = woningwaardeNu * (ctx.onderhoudspercentage / 100);
+
+  const bijkomendeLastenJaar = gemeentelijkeLastenJaar + verzekeringenJaar + onderhoudJaar;
+  const bijkomendeLastenMaand = bijkomendeLastenJaar / 12;
+
+  const totaleWoonlastenBrutoMaand = brutoMaandlast + bijkomendeLastenMaand;
+  const totaleWoonlastenNettoMaand = nettoMaandlast + bijkomendeLastenMaand;
+
+  // Woonquotes
+  const woonquoteBruto = ((brutoMaandlast * 12) / totaalBrutoJaar) * 100;
+  const woonquoteNetto = (nettoMaandlast / nettoInkomenMaand) * 100;
+  const woonquoteTotaalBruto = ((totaleWoonlastenBrutoMaand * 12) / totaalBrutoJaar) * 100;
+  const woonquoteTotaalNetto = (totaleWoonlastenNettoMaand / nettoInkomenMaand) * 100;
+
+  const nibudNorm = totaalBrutoJaar > 100000 ? 24 : totaalBrutoJaar > 70000 ? 26 : 28;
+
+  return {
+    jijMaandloon,
+    partnerMaandloon,
+    jijUren,
+    partnerUren,
+    totaalBrutoJaar,
+    nettoInkomenMaand,
+    brutoMaandlast,
+    nettoMaandlast,
+    hraPercentage,
+    eigenwoningforfait,
+    jaarlijkseRente,
+    ozbJaar,
+    waterschapJaar,
+    gemeentelijkeLastenJaar,
+    verzekeringenJaar,
+    onderhoudJaar,
+    bijkomendeLastenMaand,
+    totaleWoonlastenBrutoMaand,
+    totaleWoonlastenNettoMaand,
+    restschuld,
+    woningwaardeNu,
+    eigenVermogen,
+    totaalAfgelost,
+    woonquoteBruto,
+    woonquoteNetto,
+    woonquoteTotaalBruto,
+    woonquoteTotaalNetto,
+    nibudNorm,
+  };
+}
+
 export default function HypotheekCalculator() {
   // === WONING & HYPOTHEEK ===
   const [woningwaarde, setWoningwaarde] = useState(config.woningwaarde);
@@ -12,7 +195,7 @@ export default function HypotheekCalculator() {
   const [hypotheekType, setHypotheekType] = useState('annuitair');
   const [hypotheekProduct, setHypotheekProduct] = useState(() => {
     // Zoek ASN Bespaarhypotheek of neem eerste beschikbare provider
-    const asnBespaar = Object.values(providers).find(p => p.bank === 'ASN Bank' && p.naam.includes('Bespaar'));
+    const asnBespaar = Object.values(providers).find((p) => p.bank === 'ASN Bank' && p.naam.includes('Bespaar'));
     return asnBespaar?.id ?? Object.keys(providers)[0] ?? 'bespaar';
   });
   const [energielabel, setEnergielabel] = useState(config.energielabel);
@@ -42,8 +225,8 @@ export default function HypotheekCalculator() {
   const [aantalZichtbareJaren, setAantalZichtbareJaren] = useState(10); // 10, 20, of 30
 
   // === KOSTEN KOPER OPTIES ===
-  const [heeftBouwkundigeKeuring, setHeeftBouwkundigeKeuring] = useState(true);  // Default AAN
-  const [heeftAankoopmakelaar, setHeeftAankoopmakelaar] = useState(false);       // Default UIT
+  const [heeftBouwkundigeKeuring, setHeeftBouwkundigeKeuring] = useState(true); // Default AAN
+  const [heeftAankoopmakelaar, setHeeftAankoopmakelaar] = useState(false); // Default UIT
   const [makelaarsKosten, setMakelaarsKosten] = useState(config.makelaarsKosten);
 
   // === WOONLASTEN OPTIES ===
@@ -82,194 +265,48 @@ export default function HypotheekCalculator() {
   // === JAREN ARRAYS ===
   const jaren = Array.from({ length: 30 }, (_, i) => startJaar + i); // 2026-2055 (volledige looptijd)
 
-  // Bereken totale rente over de looptijd
-  const berekenTotaleRente = (hypotheekBedrag: number, rentePercentage: number, looptijdJaren: number): {
-    totaleRente: number;
-    totaleBetalingen: number;
-    rentePerPeriode: { jaren: number; rente: number }[];
-  } => {
-    const maandRente = rentePercentage / 100 / 12;
-    const aantalMaanden = looptijdJaren * 12;
-    let totaleRente = 0;
-    let restschuld = hypotheekBedrag;
-    const rentePerPeriode: { jaren: number; rente: number }[] = [];
-    let periodeRente = 0;
-
-    for (let maand = 1; maand <= aantalMaanden; maand++) {
-      const renteDezeM = restschuld * maandRente;
-      totaleRente += renteDezeM;
-      periodeRente += renteDezeM;
-
-      if (hypotheekType === 'annuitair') {
-        const annuiteitFactor = (maandRente * Math.pow(1 + maandRente, aantalMaanden)) / (Math.pow(1 + maandRente, aantalMaanden) - 1);
-        const maandlast = hypotheekBedrag * annuiteitFactor;
-        const aflossing = maandlast - renteDezeM;
-        restschuld -= aflossing;
-      } else {
-        // Lineair
-        restschuld -= hypotheekBedrag / aantalMaanden;
-      }
-
-      // Sla rente op per 5 jaar
-      if (maand % 60 === 0) {
-        rentePerPeriode.push({ jaren: maand / 12, rente: periodeRente });
-        periodeRente = 0;
-      }
-    }
-
-    return {
-      totaleRente,
-      totaleBetalingen: hypotheekBedrag + totaleRente,
-      rentePerPeriode
-    };
-  };
-
   // Haal actieve provider op
   const provider = providers[hypotheekProduct];
 
-  // Volledige jaarlijkse situatie berekenen
-  const berekenJaarSituatie = (jaar: number, hypotheekBedrag: number, rente: number) => {
-    const jarenSindsStart = jaar - startJaar;
-
-    let jijBrutoJaar: number;
-    let partnerBrutoJaar: number;
-    let jijUren: number;
-    let partnerUren: number;
-    let jijMaandloon: number;
-    let partnerMaandloon: number;
-
-    const indexering = Math.pow(1.02, jarenSindsStart); // 2% per jaar
-
-    let jijBasis = brutoJaarJij * indexering;
-    const partnerBasis = brutoJaarPartner * indexering;
-
-    // Promotie-opslag
-    if (promotieJaar && jaar >= promotieJaar) {
-      jijBasis *= (1 + promotieOpslag / 100);
-    }
-
-    // Werkuren aanpassen indien minder werken
-    const jijWerktMinder = jijMinderWerkenJaar && jaar >= jijMinderWerkenJaar;
-    const partnerWerktMinder = partnerMinderWerkenJaar && jaar >= partnerMinderWerkenJaar;
-    jijUren = jijWerktMinder ? jijUrenNaMinderWerken : config.jijMaxUren;
-    partnerUren = partnerWerktMinder ? partnerUrenNaMinderWerken : config.partnerMaxUren;
-
-    // Bruto inkomen naar rato van uren
-    jijBrutoJaar = jijBasis * (jijUren / config.jijMaxUren);
-    partnerBrutoJaar = partnerBasis * (partnerUren / config.partnerMaxUren);
-    jijMaandloon = jijBrutoJaar / 12;
-    partnerMaandloon = partnerBrutoJaar / 12;
-
-    const totaalBrutoJaar = jijBrutoJaar + partnerBrutoJaar;
-
-    // === HYPOTHEEK & WOONLASTEN ===
-    const totaalAfgelost = (hypotheekBedrag / 30) * jarenSindsStart;
-    const restschuld = hypotheekBedrag - totaalAfgelost;
-    const woningwaardeNu = woningwaarde * Math.pow(1 + woningIndexatie, jarenSindsStart);
-
-    // Eigenwoningforfait (0.35% van WOZ-waarde)
-    const eigenwoningforfait = woningwaardeNu * 0.0035;
-
-    const hraPercentage = HRA_MAX_TARIEF;
-
-    // Maandelijkse rente en aflossing
-    const maandRente = rente / 100 / 12;
-    let brutoMaandlast: number;
-
-    if (hypotheekType === 'annuitair') {
-      const annuiteitFactor = (maandRente * Math.pow(1 + maandRente, 360)) / (Math.pow(1 + maandRente, 360) - 1);
-      brutoMaandlast = hypotheekBedrag * annuiteitFactor;
-    } else {
-      // Lineair: aflossing + rente over restschuld
-      const maandAflossing = hypotheekBedrag / 360;
-      brutoMaandlast = maandAflossing + restschuld * maandRente;
-    }
-
-    // Netto maandlast na hypotheekrenteaftrek
-    const jaarlijkseRente = restschuld * (rente / 100);
-    const hraVoordeel = Math.max(0, (jaarlijkseRente * hraPercentage - eigenwoningforfait * hraPercentage)) / 12;
-    const nettoMaandlast = brutoMaandlast - hraVoordeel;
-
-    // Eigen vermogen
-    const eigenVermogen = woningwaardeNu - restschuld;
-
-    // Netto inkomen (progressieve belasting + heffingskortingen, per persoon)
-    const nettoInkomenMaand = berekenHuishoudNettoMaand(jijBrutoJaar, partnerBrutoJaar);
-
-    // === EXTRA WOONLASTEN ===
-    // Gemeentelijke lasten (OZB stijgt mee met WOZ)
-    const ozbJaar = woningwaardeNu * (gemeenteData.ozbPercentage / 100);
-    const waterschapJaar = berekenWaterschapJaar(gemeenteData.waterschap, woningwaardeNu);
-    const gemeentelijkeLastenJaar = ozbJaar +
-      waterschapJaar +
-      gemeenteData.rioolheffingJaar +
-      gemeenteData.afvalstoffenheffingJaar;
-
-    // Verzekeringen en onderhoud
-    const verzekeringenJaar = opstalverzekeringMaand * 12;
-    const onderhoudJaar = woningwaardeNu * (onderhoudspercentage / 100);
-
-    // Bijkomende woonlasten (excl. hypotheek)
-    const bijkomendeLastenJaar = gemeentelijkeLastenJaar + verzekeringenJaar + onderhoudJaar;
-    const bijkomendeLastenMaand = bijkomendeLastenJaar / 12;
-
-    // Totale woonlasten
-    const totaleWoonlastenBrutoMaand = brutoMaandlast + bijkomendeLastenMaand;
-    const totaleWoonlastenNettoMaand = nettoMaandlast + bijkomendeLastenMaand;
-
-    // Woonquotes (alleen hypotheek)
-    const woonquoteBruto = (brutoMaandlast * 12 / totaalBrutoJaar) * 100;
-    const woonquoteNetto = (nettoMaandlast / nettoInkomenMaand) * 100;
-
-    // Woonquotes (totaal inclusief bijkomende lasten)
-    const woonquoteTotaalBruto = (totaleWoonlastenBrutoMaand * 12 / totaalBrutoJaar) * 100;
-    const woonquoteTotaalNetto = (totaleWoonlastenNettoMaand / nettoInkomenMaand) * 100;
-
-    // Nibud-norm (afhankelijk van inkomen)
-    const nibudNorm = totaalBrutoJaar > 100000 ? 24 : totaalBrutoJaar > 70000 ? 26 : 28;
-
-    return {
-      // Inkomen
-      jijMaandloon,
-      partnerMaandloon,
-      jijUren,
-      partnerUren,
-      totaalBrutoJaar,
-      nettoInkomenMaand,
-
-      // Woonlasten (hypotheek)
-      brutoMaandlast,
-      nettoMaandlast,
-      hraPercentage,
-      eigenwoningforfait,
-      jaarlijkseRente,
-
-      // Bijkomende woonlasten
-      ozbJaar,
-      waterschapJaar,
-      gemeentelijkeLastenJaar,
-      verzekeringenJaar,
-      onderhoudJaar,
-      bijkomendeLastenMaand,
-
-      // Totale woonlasten
-      totaleWoonlastenBrutoMaand,
-      totaleWoonlastenNettoMaand,
-
-      // Vermogen
-      restschuld,
-      woningwaardeNu,
-      eigenVermogen,
-      totaalAfgelost,
-
-      // Woonquotes
-      woonquoteBruto,
-      woonquoteNetto,
-      woonquoteTotaalBruto,
-      woonquoteTotaalNetto,
-      nibudNorm
-    };
-  };
+  // Context voor jaarlijkse berekening (gememoized zodat useMemo niet onnodig herberekent)
+  const jaarCtx: JaarContext = useMemo(
+    () => ({
+      startJaar,
+      brutoJaarJij,
+      brutoJaarPartner,
+      promotieJaar,
+      promotieOpslag,
+      jijMinderWerkenJaar,
+      partnerMinderWerkenJaar,
+      jijUrenNaMinderWerken,
+      partnerUrenNaMinderWerken,
+      jijMaxUren: config.jijMaxUren,
+      partnerMaxUren: config.partnerMaxUren,
+      woningwaarde,
+      woningIndexatie,
+      hypotheekType,
+      gemeenteData,
+      opstalverzekeringMaand,
+      onderhoudspercentage,
+    }),
+    [
+      startJaar,
+      brutoJaarJij,
+      brutoJaarPartner,
+      promotieJaar,
+      promotieOpslag,
+      jijMinderWerkenJaar,
+      partnerMinderWerkenJaar,
+      jijUrenNaMinderWerken,
+      partnerUrenNaMinderWerken,
+      woningwaarde,
+      woningIndexatie,
+      hypotheekType,
+      gemeenteData,
+      opstalverzekeringMaand,
+      onderhoudspercentage,
+    ],
+  );
 
   // === HOOFDBEREKENING ===
   const berekening = useMemo(() => {
@@ -295,14 +332,14 @@ export default function HypotheekCalculator() {
     };
 
     // Bereken totalen
-    const kostenKoperVast = kostenKoperDetail.notarisTransport +
+    const kostenKoperVast =
+      kostenKoperDetail.notarisTransport +
       kostenKoperDetail.notarisHypotheek +
       kostenKoperDetail.kadaster +
       kostenKoperDetail.taxatie +
       kostenKoperDetail.bankgarantie;
 
-    const kostenKoperOptioneel = kostenKoperDetail.bouwkundigeKeuring +
-      kostenKoperDetail.makelaarskosten;
+    const kostenKoperOptioneel = kostenKoperDetail.bouwkundigeKeuring + kostenKoperDetail.makelaarskosten;
 
     const kostenKoperBasis = kostenKoperVast + kostenKoperOptioneel + overdrachtsbelasting;
 
@@ -329,10 +366,8 @@ export default function HypotheekCalculator() {
     // === BELASTINGVOORDEEL KOSTEN KOPER ===
     // Aftrekbaar zijn: notaris hypotheekakte, taxatie, NHG-premie, bankgarantie (hypotheekgerelateerd)
     const HRA_TARIEF = HRA_MAX_TARIEF;
-    const aftrekbareKosten = kostenKoperDetail.notarisHypotheek +
-      kostenKoperDetail.taxatie +
-      kostenKoperDetail.bankgarantie +
-      nhgPremie;
+    const aftrekbareKosten =
+      kostenKoperDetail.notarisHypotheek + kostenKoperDetail.taxatie + kostenKoperDetail.bankgarantie + nhgPremie;
     const belastingvoordeelKosten = aftrekbareKosten * HRA_TARIEF;
     const kostenKoperNetto = kostenKoperTotaal - belastingvoordeelKosten;
 
@@ -341,9 +376,9 @@ export default function HypotheekCalculator() {
     const rente = provider.berekenRente({ ltv, heeftNHG, energielabel, rentevastePeriode });
 
     // === TOTALE RENTE BEREKENING ===
-    const renteBerekening = berekenTotaleRente(hypotheekBedrag, rente, 30);
-    const renteLager = berekenTotaleRente(hypotheekBedrag, rente - 0.2, 30);
-    const renteHoger = berekenTotaleRente(hypotheekBedrag, rente + 0.2, 30);
+    const renteBerekening = berekenTotaleRente(hypotheekBedrag, rente, 30, hypotheekType);
+    const renteLager = berekenTotaleRente(hypotheekBedrag, rente - 0.2, 30, hypotheekType);
+    const renteHoger = berekenTotaleRente(hypotheekBedrag, rente + 0.2, 30, hypotheekType);
 
     // Rente eerste 10 jaar
     const renteEerste10Jaar = renteBerekening.rentePerPeriode.slice(0, 2).reduce((sum, p) => sum + p.rente, 0);
@@ -353,8 +388,8 @@ export default function HypotheekCalculator() {
     const verschilHoger = renteHoger.totaleRente - renteBerekening.totaleRente;
 
     // Bereken situatie voor startjaar en bekijkjaar
-    const situatie2026 = berekenJaarSituatie(startJaar, hypotheekBedrag, rente);
-    const situatieBekijkJaar = berekenJaarSituatie(bekijkJaar, hypotheekBedrag, rente);
+    const situatie2026 = berekenJaarSituatiePure(startJaar, hypotheekBedrag, rente, jaarCtx);
+    const situatieBekijkJaar = berekenJaarSituatiePure(bekijkJaar, hypotheekBedrag, rente, jaarCtx);
 
     // Buffer in maanden
     const bufferInMaanden = buffer / situatieBekijkJaar.nettoMaandlast;
@@ -379,7 +414,7 @@ export default function HypotheekCalculator() {
       const renteVerschil = Math.max(0, rente - AANGENOMEN_BODEM_MARKTRENTE);
       let maxBoeterente = 0;
       if (resterendeRentevasteJaren > 0 && renteVerschil > 0) {
-        const boetevrijDeel = restschuldBijScheiding * boetevrijPercentage / 100;
+        const boetevrijDeel = (restschuldBijScheiding * boetevrijPercentage) / 100;
         maxBoeterente = (renteVerschil / 100) * (restschuldBijScheiding - boetevrijDeel) * resterendeRentevasteJaren;
       }
 
@@ -394,9 +429,15 @@ export default function HypotheekCalculator() {
         maxBoeterente,
       };
 
-      const verkoopKostenTotaal = verkoopkorting + makelaarskosten +
-        VERKOOP_STYLING_FOTOS + VERKOOP_ENERGIELABEL + VERKOOP_NOTARIS_ROYEMENT +
-        VERKOOP_KADASTER + VERKOOP_OPKNAPPEN + maxBoeterente;
+      const verkoopKostenTotaal =
+        verkoopkorting +
+        makelaarskosten +
+        VERKOOP_STYLING_FOTOS +
+        VERKOOP_ENERGIELABEL +
+        VERKOOP_NOTARIS_ROYEMENT +
+        VERKOOP_KADASTER +
+        VERKOOP_OPKNAPPEN +
+        maxBoeterente;
 
       const overwaardeNetto = woningwaardeBijScheiding - restschuldBijScheiding - verkoopKostenTotaal;
 
@@ -426,7 +467,7 @@ export default function HypotheekCalculator() {
         partnerInleg,
         vorderingJij,
         jijKrijgt,
-        partnerKrijgt
+        partnerKrijgt,
       };
     }
 
@@ -481,21 +522,35 @@ export default function HypotheekCalculator() {
       scheidingResultaat,
 
       // Helper voor jaarlijkse tabel
-      berekenJaar: (jaar: number) => berekenJaarSituatie(jaar, hypotheekBedrag, rente)
+      berekenJaar: (jaar: number) => berekenJaarSituatiePure(jaar, hypotheekBedrag, rente, jaarCtx),
     };
-  }, [woningwaarde, buffer, hypotheekType, hypotheekProduct, energielabel, rentevastePeriode,
-      jijMinderWerkenJaar, partnerMinderWerkenJaar, jijUrenNaMinderWerken, partnerUrenNaMinderWerken,
-      promotieJaar, promotieOpslag, bekijkJaar, jarenTotScheiding,
-      heeftBouwkundigeKeuring, heeftAankoopmakelaar, makelaarsKosten,
-      gemeente, opstalverzekeringMaand, onderhoudspercentage,
-      brutoJaarJij, brutoJaarPartner]);
+  }, [
+    woningwaarde,
+    buffer,
+    hypotheekType,
+    energielabel,
+    rentevastePeriode,
+    bekijkJaar,
+    jarenTotScheiding,
+    heeftBouwkundigeKeuring,
+    heeftAankoopmakelaar,
+    makelaarsKosten,
+    provider,
+    startJaar,
+    totaalSpaargeld,
+    jijInlegRatio,
+    partnerInlegRatio,
+    woningIndexatie,
+    jaarCtx,
+  ]);
 
   // === FORMATTERS ===
-  const formatBedrag = (n: number) => new Intl.NumberFormat('nl-NL', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0
-  }).format(n);
+  const formatBedrag = (n: number) =>
+    new Intl.NumberFormat('nl-NL', {
+      style: 'currency',
+      currency: 'EUR',
+      maximumFractionDigits: 0,
+    }).format(n);
 
   const formatPercentage = (n: number, decimalen = 1) => `${n.toFixed(decimalen)}%`;
 
@@ -521,8 +576,8 @@ export default function HypotheekCalculator() {
         <p className="text-gray-500 text-xs mt-1">
           {laatstBijgewerkt
             ? `${Object.keys(providers).length} hypotheekproducten · Tarieven van ${new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`
-            : 'ASN Bank tarieven (fallback)'
-          } · Inclusief NHG-premie, HRA en woningindexatie
+            : 'ASN Bank tarieven (fallback)'}{' '}
+          · Inclusief NHG-premie, HRA en woningindexatie
         </p>
       </div>
 
@@ -594,7 +649,7 @@ export default function HypotheekCalculator() {
                           </option>
                         ))}
                       </optgroup>
-                    )
+                    ),
                   )}
               </select>
             </div>
@@ -605,9 +660,7 @@ export default function HypotheekCalculator() {
                 <button
                   onClick={() => setHypotheekType('annuitair')}
                   className={`flex-1 py-2 px-3 text-sm transition-colors ${
-                    hypotheekType === 'annuitair'
-                      ? 'bg-blue-600 text-white font-medium'
-                      : 'bg-white hover:bg-gray-50'
+                    hypotheekType === 'annuitair' ? 'bg-blue-600 text-white font-medium' : 'bg-white hover:bg-gray-50'
                   }`}
                 >
                   Annuïtair
@@ -615,9 +668,7 @@ export default function HypotheekCalculator() {
                 <button
                   onClick={() => setHypotheekType('lineair')}
                   className={`flex-1 py-2 px-3 text-sm transition-colors border-l ${
-                    hypotheekType === 'lineair'
-                      ? 'bg-blue-600 text-white font-medium'
-                      : 'bg-white hover:bg-gray-50'
+                    hypotheekType === 'lineair' ? 'bg-blue-600 text-white font-medium' : 'bg-white hover:bg-gray-50'
                   }`}
                 >
                   Lineair
@@ -652,8 +703,10 @@ export default function HypotheekCalculator() {
                   {(provider.beschikbarePeriodes.length > 0
                     ? provider.beschikbarePeriodes
                     : [1, 2, 3, 4, 5, 6, 7, 10, 12, 15, 20]
-                  ).map(p => (
-                    <option key={p} value={p}>{p === 0 ? 'Variabel' : `${p} jaar vast`}</option>
+                  ).map((p) => (
+                    <option key={p} value={p}>
+                      {p === 0 ? 'Variabel' : `${p} jaar vast`}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -671,17 +724,23 @@ export default function HypotheekCalculator() {
                 </span>
                 {laatstBijgewerkt && (
                   <span className="text-gray-400">
-                    Tarieven van {new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    Tarieven van{' '}
+                    {new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
                   </span>
                 )}
               </div>
-              {provider.beschikbareLtvKlassen && provider.beschikbareLtvKlassen.length > 0 &&
+              {provider.beschikbareLtvKlassen &&
+                provider.beschikbareLtvKlassen.length > 0 &&
                 !provider.beschikbareLtvKlassen.includes(getLtvKey(berekening.ltv, berekening.heeftNHG)) && (
-                <p className="text-xs text-amber-600 mt-1">
-                  ⚠ Deze aanbieder is niet beschikbaar bij jouw LTV ({Math.round(berekening.ltv)}%).
-                  Beschikbaar bij: {provider.beschikbareLtvKlassen.map(k => k === 'nhg' ? 'NHG' : `≤${k}%`).join(', ')}.
-                </p>
-              )}
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠ Deze aanbieder is niet beschikbaar bij jouw LTV ({Math.round(berekening.ltv)}%). Beschikbaar bij:{' '}
+                    {provider.beschikbareLtvKlassen.map((k) => (k === 'nhg' ? 'NHG' : `≤${k}%`)).join(', ')}.
+                  </p>
+                )}
               {provider.voorwaarden?.toelichting && (
                 <p className="text-xs text-green-600 mt-1">{provider.voorwaarden.toelichting}</p>
               )}
@@ -747,7 +806,9 @@ export default function HypotheekCalculator() {
                 className="w-full p-2 border rounded text-sm"
               >
                 {Object.entries(gemeenteTarieven).map(([key, data]) => (
-                  <option key={key} value={key}>{data.naam}</option>
+                  <option key={key} value={key}>
+                    {data.naam}
+                  </option>
                 ))}
               </select>
             </div>
@@ -767,7 +828,14 @@ export default function HypotheekCalculator() {
                 </div>
                 <div className="flex justify-between">
                   <span>Waterschap ({gemeenteData.waterschap.naam}):</span>
-                  <span>{gemeenteData.waterschap.eigenarenPercentage}% + {formatBedrag(gemeenteData.waterschap.ingezetenenJaar + gemeenteData.waterschap.zuiveringPerVE * gemeenteData.waterschap.veMeerpersoons)}/jaar</span>
+                  <span>
+                    {gemeenteData.waterschap.eigenarenPercentage}% +{' '}
+                    {formatBedrag(
+                      gemeenteData.waterschap.ingezetenenJaar +
+                        gemeenteData.waterschap.zuiveringPerVE * gemeenteData.waterschap.veMeerpersoons,
+                    )}
+                    /jaar
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Rioolheffing:</span>
@@ -868,7 +936,9 @@ export default function HypotheekCalculator() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-500">Toetsinkomen: bruto jaarloon incl. vakantiegeld, 13e maand e.d. Jaarlijks 2% geïndexeerd.</p>
+              <p className="text-xs text-gray-500">
+                Toetsinkomen: bruto jaarloon incl. vakantiegeld, 13e maand e.d. Jaarlijks 2% geïndexeerd.
+              </p>
             </div>
 
             {/* Berekend inkomen resultaat */}
@@ -904,7 +974,11 @@ export default function HypotheekCalculator() {
                 className="w-full p-2 border rounded text-sm"
               >
                 <option value="">Niet minder gaan werken</option>
-                {jaren.map(j => <option key={j} value={j}>{j}</option>)}
+                {jaren.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -933,7 +1007,11 @@ export default function HypotheekCalculator() {
                 className="w-full p-2 border rounded text-sm"
               >
                 <option value="">Niet minder gaan werken</option>
-                {jaren.map(j => <option key={j} value={j}>{j}</option>)}
+                {jaren.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -962,7 +1040,11 @@ export default function HypotheekCalculator() {
                 className="w-full p-2 border rounded text-sm"
               >
                 <option value="">Geen promotie</option>
-                {jaren.map(j => <option key={j} value={j}>{j}</option>)}
+                {jaren.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -993,7 +1075,10 @@ export default function HypotheekCalculator() {
                 {jarenTotScheiding === 0 ? (
                   <span className="font-medium">Geen scheiding</span>
                 ) : (
-                  <span>Scheiding na <span className="font-medium">{jarenTotScheiding} jaar</span> ({startJaar + jarenTotScheiding})</span>
+                  <span>
+                    Scheiding na <span className="font-medium">{jarenTotScheiding} jaar</span> (
+                    {startJaar + jarenTotScheiding})
+                  </span>
                 )}
               </label>
               <input
@@ -1011,107 +1096,109 @@ export default function HypotheekCalculator() {
               </div>
             </div>
 
-            {berekening.scheidingResultaat && (() => {
-              const s = berekening.scheidingResultaat;
-              return (
-              <div className="bg-white p-3 rounded border text-xs space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-gray-500">Woningwaarde:</p>
-                    <p className="font-medium">{formatBedrag(s.woningwaardeBijScheiding)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Restschuld:</p>
-                    <p className="font-medium">{formatBedrag(s.restschuldBijScheiding)}</p>
-                  </div>
-                </div>
-
-                <div className="border-t pt-2">
-                  <p className="text-gray-500">Overwaarde (bruto):</p>
-                  <p className="font-medium">{formatBedrag(s.overwaardebruto)}</p>
-                </div>
-
-                <details className="border-t pt-2">
-                  <summary className="text-orange-700 font-medium cursor-pointer">
-                    Verkoopkosten: -{formatBedrag(s.verkoopKostenTotaal)}
-                  </summary>
-                  <div className="mt-1 space-y-0.5 text-gray-600 pl-2">
-                    <div className="flex justify-between">
-                      <span>Verkoopkorting (3%, snelle verkoop)</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.verkoopkorting)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Verkoopmakelaar (1,5%)</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.makelaarskosten)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Styling & foto's</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.stylingFotos)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Energielabel</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.energielabel)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Notaris (royement hypotheek)</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.notarisRoyement)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Kadaster</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.kadaster)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Opknappen/presentabel maken</span>
-                      <span>-{formatBedrag(s.verkoopKostenDetail.opknappen)}</span>
-                    </div>
-                    {s.verkoopKostenDetail.maxBoeterente > 0 && (
-                      <div className="flex justify-between text-orange-700">
-                        <span>Boeterente (conservatief)*</span>
-                        <span>-{formatBedrag(s.verkoopKostenDetail.maxBoeterente)}</span>
+            {berekening.scheidingResultaat &&
+              (() => {
+                const s = berekening.scheidingResultaat;
+                return (
+                  <div className="bg-white p-3 rounded border text-xs space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-gray-500">Woningwaarde:</p>
+                        <p className="font-medium">{formatBedrag(s.woningwaardeBijScheiding)}</p>
                       </div>
-                    )}
-                  </div>
-                  {s.verkoopKostenDetail.maxBoeterente > 0 && (
-                    <p className="text-[10px] text-gray-400 mt-1 pl-2">
-                      * Conservatieve schatting (aanname marktrente 2%). Boetevrij aflossen: {s.boetevrijPercentage}% ({s.providerNaam}).
-                      Nog {s.resterendeRentevasteJaren} jaar rentevast. Werkelijke boete hangt af van marktrente op dat moment.
-                    </p>
-                  )}
-                </details>
+                      <div>
+                        <p className="text-gray-500">Restschuld:</p>
+                        <p className="font-medium">{formatBedrag(s.restschuldBijScheiding)}</p>
+                      </div>
+                    </div>
 
-                <div className="border-t pt-2">
-                  <p className="text-gray-500">Netto overwaarde (na verkoopkosten):</p>
-                  <p className={`font-medium text-lg ${s.overwaardeNetto >= 0 ? '' : 'text-red-600'}`}>
-                    {formatBedrag(s.overwaardeNetto)}
-                  </p>
-                </div>
+                    <div className="border-t pt-2">
+                      <p className="text-gray-500">Overwaarde (bruto):</p>
+                      <p className="font-medium">{formatBedrag(s.overwaardebruto)}</p>
+                    </div>
 
-                <div className="border-t pt-2 space-y-1">
-                  <p className="text-gray-600 font-medium">Inleg (terugvordering):</p>
-                  <div className="flex justify-between">
-                    <span>Jij ({config.inlegPercentageJij}%):</span>
-                    <span>{formatBedrag(s.jijInleg)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Partner ({100 - config.inlegPercentageJij}%):</span>
-                    <span>{formatBedrag(s.partnerInleg)}</span>
-                  </div>
-                </div>
+                    <details className="border-t pt-2">
+                      <summary className="text-orange-700 font-medium cursor-pointer">
+                        Verkoopkosten: -{formatBedrag(s.verkoopKostenTotaal)}
+                      </summary>
+                      <div className="mt-1 space-y-0.5 text-gray-600 pl-2">
+                        <div className="flex justify-between">
+                          <span>Verkoopkorting (3%, snelle verkoop)</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.verkoopkorting)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Verkoopmakelaar (1,5%)</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.makelaarskosten)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Styling & foto's</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.stylingFotos)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Energielabel</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.energielabel)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Notaris (royement hypotheek)</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.notarisRoyement)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Kadaster</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.kadaster)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Opknappen/presentabel maken</span>
+                          <span>-{formatBedrag(s.verkoopKostenDetail.opknappen)}</span>
+                        </div>
+                        {s.verkoopKostenDetail.maxBoeterente > 0 && (
+                          <div className="flex justify-between text-orange-700">
+                            <span>Boeterente (conservatief)*</span>
+                            <span>-{formatBedrag(s.verkoopKostenDetail.maxBoeterente)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {s.verkoopKostenDetail.maxBoeterente > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-1 pl-2">
+                          * Conservatieve schatting (aanname marktrente 2%). Boetevrij aflossen: {s.boetevrijPercentage}
+                          % ({s.providerNaam}). Nog {s.resterendeRentevasteJaren} jaar rentevast. Werkelijke boete hangt
+                          af van marktrente op dat moment.
+                        </p>
+                      )}
+                    </details>
 
-                <div className="border-t pt-2 space-y-1">
-                  <p className="text-gray-600 font-medium">Verdeling (inleg terug + 50/50):</p>
-                  <div className="flex justify-between text-green-700">
-                    <span>Jij ontvangt:</span>
-                    <span className="font-bold">{formatBedrag(s.jijKrijgt)}</span>
+                    <div className="border-t pt-2">
+                      <p className="text-gray-500">Netto overwaarde (na verkoopkosten):</p>
+                      <p className={`font-medium text-lg ${s.overwaardeNetto >= 0 ? '' : 'text-red-600'}`}>
+                        {formatBedrag(s.overwaardeNetto)}
+                      </p>
+                    </div>
+
+                    <div className="border-t pt-2 space-y-1">
+                      <p className="text-gray-600 font-medium">Inleg (terugvordering):</p>
+                      <div className="flex justify-between">
+                        <span>Jij ({config.inlegPercentageJij}%):</span>
+                        <span>{formatBedrag(s.jijInleg)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Partner ({100 - config.inlegPercentageJij}%):</span>
+                        <span>{formatBedrag(s.partnerInleg)}</span>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-2 space-y-1">
+                      <p className="text-gray-600 font-medium">Verdeling (inleg terug + 50/50):</p>
+                      <div className="flex justify-between text-green-700">
+                        <span>Jij ontvangt:</span>
+                        <span className="font-bold">{formatBedrag(s.jijKrijgt)}</span>
+                      </div>
+                      <div className="flex justify-between text-blue-700">
+                        <span>Partner ontvangt:</span>
+                        <span className="font-bold">{formatBedrag(s.partnerKrijgt)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-blue-700">
-                    <span>Partner ontvangt:</span>
-                    <span className="font-bold">{formatBedrag(s.partnerKrijgt)}</span>
-                  </div>
-                </div>
-              </div>
-              );
-            })()}
+                );
+              })()}
           </div>
 
           {/* Vermogen */}
@@ -1142,7 +1229,6 @@ export default function HypotheekCalculator() {
               </div>
             </div>
           </div>
-
         </div>
 
         {/* === KOLOM 3: RESULTATEN === */}
@@ -1234,10 +1320,7 @@ export default function HypotheekCalculator() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Startersvrijstelling:</span>
                 <span className={berekening.heeftStartersvrijstelling ? 'text-green-600' : 'text-red-600'}>
-                  {berekening.heeftStartersvrijstelling
-                    ? `Ja (${formatBedrag(woningwaarde * 0.02)} bespaard)`
-                    : 'Nee'
-                  }
+                  {berekening.heeftStartersvrijstelling ? `Ja (${formatBedrag(woningwaarde * 0.02)} bespaard)` : 'Nee'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1271,7 +1354,10 @@ export default function HypotheekCalculator() {
                 <span>{formatBedrag(berekening.totaleBetalingen30Jaar)}</span>
               </div>
               <div className="flex justify-between text-xs text-gray-500">
-                <span>≈ {(berekening.totaleRente30Jaar / berekening.situatie2026.totaalBrutoJaar).toFixed(1)} jaarsalarissen aan rente</span>
+                <span>
+                  ≈ {(berekening.totaleRente30Jaar / berekening.situatie2026.totaalBrutoJaar).toFixed(1)} jaarsalarissen
+                  aan rente
+                </span>
               </div>
 
               {/* Vergelijkingstabel */}
@@ -1289,9 +1375,13 @@ export default function HypotheekCalculator() {
                   <tbody>
                     <tr>
                       <td className="py-1 text-gray-600">Rente</td>
-                      <td className="text-right text-green-600">{formatPercentage(berekening.renteLagerPercentage, 2)}</td>
+                      <td className="text-right text-green-600">
+                        {formatPercentage(berekening.renteLagerPercentage, 2)}
+                      </td>
                       <td className="text-right font-bold">{formatPercentage(berekening.rente, 2)}</td>
-                      <td className="text-right text-red-600">{formatPercentage(berekening.renteHogerPercentage, 2)}</td>
+                      <td className="text-right text-red-600">
+                        {formatPercentage(berekening.renteHogerPercentage, 2)}
+                      </td>
                     </tr>
                     <tr>
                       <td className="py-1 text-gray-600">Totale rente</td>
@@ -1301,7 +1391,9 @@ export default function HypotheekCalculator() {
                     </tr>
                     <tr className="border-t">
                       <td className="py-1 text-gray-600">Verschil</td>
-                      <td className="text-right text-green-700 font-medium">−{formatBedrag(berekening.verschilLager)}</td>
+                      <td className="text-right text-green-700 font-medium">
+                        −{formatBedrag(berekening.verschilLager)}
+                      </td>
                       <td className="text-right">—</td>
                       <td className="text-right text-red-700 font-medium">+{formatBedrag(berekening.verschilHoger)}</td>
                     </tr>
@@ -1320,7 +1412,9 @@ export default function HypotheekCalculator() {
                 <div className="bg-white rounded p-2 text-xs space-y-1 mt-1">
                   {berekening.rentePerPeriode.map((periode, i) => (
                     <div key={i} className="flex justify-between">
-                      <span className="text-gray-600">Jaar {periode.jaren - 4}-{periode.jaren}:</span>
+                      <span className="text-gray-600">
+                        Jaar {periode.jaren - 4}-{periode.jaren}:
+                      </span>
                       <span>{formatBedrag(periode.rente)}</span>
                     </div>
                   ))}
@@ -1334,7 +1428,9 @@ export default function HypotheekCalculator() {
           </div>
 
           {/* Woonlasten */}
-          <div className={`border-2 rounded-lg p-4 ${getWoonquoteKleur(berekening.situatieBekijkJaar.woonquoteTotaalBruto, berekening.situatieBekijkJaar.nibudNorm)}`}>
+          <div
+            className={`border-2 rounded-lg p-4 ${getWoonquoteKleur(berekening.situatieBekijkJaar.woonquoteTotaalBruto, berekening.situatieBekijkJaar.nibudNorm)}`}
+          >
             <h2 className="font-semibold text-gray-800 mb-3">Woonlasten {bekijkJaar}</h2>
             <div className="space-y-2 text-sm">
               {/* Hypotheeklasten */}
@@ -1344,7 +1440,13 @@ export default function HypotheekCalculator() {
               </div>
               <div className="flex justify-between text-green-600 text-xs">
                 <span>- HRA voordeel:</span>
-                <span>-{formatBedrag(berekening.situatieBekijkJaar.brutoMaandlast - berekening.situatieBekijkJaar.nettoMaandlast)}/mnd</span>
+                <span>
+                  -
+                  {formatBedrag(
+                    berekening.situatieBekijkJaar.brutoMaandlast - berekening.situatieBekijkJaar.nettoMaandlast,
+                  )}
+                  /mnd
+                </span>
               </div>
               <div className="flex justify-between font-medium border-t pt-1">
                 <span>Hypotheek netto:</span>
@@ -1355,7 +1457,8 @@ export default function HypotheekCalculator() {
                 onClick={() => setToonWoonlastenDetail(!toonWoonlastenDetail)}
                 className="text-xs text-cyan-600 hover:text-cyan-800 mt-2 flex items-center gap-1"
               >
-                {toonWoonlastenDetail ? '▼' : '▶'} Bijkomende lasten ({formatBedrag(berekening.situatieBekijkJaar.bijkomendeLastenMaand)}/mnd)
+                {toonWoonlastenDetail ? '▼' : '▶'} Bijkomende lasten (
+                {formatBedrag(berekening.situatieBekijkJaar.bijkomendeLastenMaand)}/mnd)
               </button>
               {toonWoonlastenDetail && (
                 <div className="bg-white/50 rounded p-2 text-xs space-y-1">
@@ -1369,7 +1472,9 @@ export default function HypotheekCalculator() {
                   </div>
                   <div className="flex justify-between">
                     <span>Riool + afval:</span>
-                    <span>{formatBedrag((gemeenteData.rioolheffingJaar + gemeenteData.afvalstoffenheffingJaar) / 12)}/mnd</span>
+                    <span>
+                      {formatBedrag((gemeenteData.rioolheffingJaar + gemeenteData.afvalstoffenheffingJaar) / 12)}/mnd
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Opstalverzekering:</span>
@@ -1400,7 +1505,9 @@ export default function HypotheekCalculator() {
                 </div>
                 <div className="flex justify-between font-medium">
                   <span>Woonquote (totaal):</span>
-                  <span className={`text-lg ${getWoonquoteTekstKleur(berekening.situatieBekijkJaar.woonquoteTotaalBruto, berekening.situatieBekijkJaar.nibudNorm)}`}>
+                  <span
+                    className={`text-lg ${getWoonquoteTekstKleur(berekening.situatieBekijkJaar.woonquoteTotaalBruto, berekening.situatieBekijkJaar.nibudNorm)}`}
+                  >
                     {formatPercentage(berekening.situatieBekijkJaar.woonquoteTotaalBruto)}
                   </span>
                 </div>
@@ -1420,8 +1527,7 @@ export default function HypotheekCalculator() {
                 ? '⚠️ Woonquote boven Nibud-norm'
                 : berekening.situatieBekijkJaar.woonquoteTotaalBruto > berekening.situatieBekijkJaar.nibudNorm
                   ? '⚡ Woonquote op rand van Nibud-norm'
-                  : '✓ Woonquote binnen Nibud-norm'
-              }
+                  : '✓ Woonquote binnen Nibud-norm'}
             </p>
           </div>
 
@@ -1429,8 +1535,8 @@ export default function HypotheekCalculator() {
           {!berekening.hypotheekMogelijk && (
             <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
               <p className="text-red-800 font-medium">
-                ⚠️ Met deze buffer houd je niet genoeg over voor de kosten koper.
-                Verhoog de buffer of kies een goedkoper huis.
+                ⚠️ Met deze buffer houd je niet genoeg over voor de kosten koper. Verhoog de buffer of kies een
+                goedkoper huis.
               </p>
             </div>
           )}
@@ -1438,14 +1544,23 @@ export default function HypotheekCalculator() {
           {(berekening.inlegWaarschuwingJij || berekening.inlegWaarschuwingPartner) && (
             <div className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
               <p className="text-yellow-800 font-medium">
-                ⚠️ Het inlegpercentage ({config.inlegPercentageJij}% / {100 - config.inlegPercentageJij}%) past niet bij het beschikbare spaargeld:
+                ⚠️ Het inlegpercentage ({config.inlegPercentageJij}% / {100 - config.inlegPercentageJij}%) past niet bij
+                het beschikbare spaargeld:
               </p>
               <ul className="text-yellow-800 text-sm mt-1 list-disc list-inside">
                 {berekening.inlegWaarschuwingJij && (
-                  <li>Jij moet {formatBedrag(berekening.bijdrageJij)} inleggen, maar heeft {formatBedrag(config.spaargeldJij)} spaargeld (tekort: {formatBedrag(berekening.bijdrageJij - config.spaargeldJij)})</li>
+                  <li>
+                    Jij moet {formatBedrag(berekening.bijdrageJij)} inleggen, maar heeft{' '}
+                    {formatBedrag(config.spaargeldJij)} spaargeld (tekort:{' '}
+                    {formatBedrag(berekening.bijdrageJij - config.spaargeldJij)})
+                  </li>
                 )}
                 {berekening.inlegWaarschuwingPartner && (
-                  <li>Partner moet {formatBedrag(berekening.bijdragePartner)} inleggen, maar heeft {formatBedrag(config.spaargeldPartner)} spaargeld (tekort: {formatBedrag(berekening.bijdragePartner - config.spaargeldPartner)})</li>
+                  <li>
+                    Partner moet {formatBedrag(berekening.bijdragePartner)} inleggen, maar heeft{' '}
+                    {formatBedrag(config.spaargeldPartner)} spaargeld (tekort:{' '}
+                    {formatBedrag(berekening.bijdragePartner - config.spaargeldPartner)})
+                  </li>
                 )}
               </ul>
             </div>
@@ -1470,7 +1585,7 @@ export default function HypotheekCalculator() {
               </tr>
             </thead>
             <tbody>
-              {jaren.slice(0, aantalZichtbareJaren).map(jaar => {
+              {jaren.slice(0, aantalZichtbareJaren).map((jaar) => {
                 const situatie = berekening.berekenJaar(jaar);
                 const isGeselecteerd = jaar === bekijkJaar;
 
@@ -1492,7 +1607,9 @@ export default function HypotheekCalculator() {
                       <span className="text-gray-400 text-xs ml-1">({situatie.partnerUren}u)</span>
                     </td>
                     <td className="text-right p-2">{formatBedrag(situatie.totaalBrutoJaar)}</td>
-                    <td className={`text-right p-2 font-medium ${getWoonquoteTekstKleur(situatie.woonquoteBruto, situatie.nibudNorm)}`}>
+                    <td
+                      className={`text-right p-2 font-medium ${getWoonquoteTekstKleur(situatie.woonquoteBruto, situatie.nibudNorm)}`}
+                    >
                       {formatPercentage(situatie.woonquoteBruto)}
                     </td>
                     <td className="text-right p-2">{formatBedrag(situatie.brutoMaandlast * 12)}</td>
@@ -1507,7 +1624,7 @@ export default function HypotheekCalculator() {
         </div>
         {aantalZichtbareJaren < 30 && (
           <button
-            onClick={() => setAantalZichtbareJaren(prev => Math.min(prev + 10, 30))}
+            onClick={() => setAantalZichtbareJaren((prev) => Math.min(prev + 10, 30))}
             className="mt-3 w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-colors"
           >
             Bekijk meer ({aantalZichtbareJaren === 10 ? 'jaar 11-20' : 'jaar 21-30'})
@@ -1525,8 +1642,8 @@ export default function HypotheekCalculator() {
 
       {/* Footer */}
       <p className="text-gray-400 text-center text-xs">
-        Indicatieve berekeningen · 2% loonstijging/jaar · 3% woningindexatie/jaar ·
-        Nibud-norm ~24% bij €100k+ bruto · Bespreek altijd met je hypotheekadviseur
+        Indicatieve berekeningen · 2% loonstijging/jaar · 3% woningindexatie/jaar · Nibud-norm ~24% bij €100k+ bruto ·
+        Bespreek altijd met je hypotheekadviseur
       </p>
     </div>
   );

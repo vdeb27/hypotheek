@@ -1,7 +1,7 @@
-import HypotheekCalculator from './HypotheekCalculator'
+import HypotheekCalculator from './HypotheekCalculator';
 
 function App() {
-  return <HypotheekCalculator />
+  return <HypotheekCalculator />;
 }
 
-export default App
+export default App;
