@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -9,5 +10,8 @@ export default defineConfig({
     // De rates-cache JSON (628KB) wordt automatisch code-split
     // en async geladen. Dit is een databestand, geen code.
     chunkSizeWarningLimit: 700,
+  },
+  test: {
+    globals: true,
   },
 });

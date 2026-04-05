@@ -52,6 +52,15 @@ const noorderzijlvest: WaterschapTarieven = {
   veMeerpersoons: 3,
 };
 
+// Hoogheemraadschap van Delfland 2026
+const delfland: WaterschapTarieven = {
+  naam: 'Delfland',
+  ingezetenenJaar: 137.51,
+  eigenarenPercentage: 0.0256,
+  zuiveringPerVE: 115.33,
+  veMeerpersoons: 3,
+};
+
 export function berekenWaterschapJaar(waterschap: WaterschapTarieven, wozWaarde: number): number {
   const ingezetenen = waterschap.ingezetenenJaar;
   const eigenaren = wozWaarde * (waterschap.eigenarenPercentage / 100);
@@ -87,5 +96,33 @@ export const gemeenteTarieven: Record<string, GemeenteTarieven> = {
     rioolheffingJaar: 178.69,
     afvalstoffenheffingJaar: 402.12,
     waterschap: noorderzijlvest,
+  },
+  'den-haag': {
+    naam: 'Den Haag',
+    ozbPercentage: 0.0523,
+    rioolheffingJaar: 195.4,
+    afvalstoffenheffingJaar: 507.48,
+    waterschap: delfland,
+  },
+  'leidschendam-voorburg': {
+    naam: 'Leidschendam-Voorburg',
+    ozbPercentage: 0.0708,
+    rioolheffingJaar: 244.92,
+    afvalstoffenheffingJaar: 452.4,
+    waterschap: delfland,
+  },
+  rijswijk: {
+    naam: 'Rijswijk',
+    ozbPercentage: 0.0711,
+    rioolheffingJaar: 105.64,
+    afvalstoffenheffingJaar: 546.48,
+    waterschap: delfland,
+  },
+  'pijnacker-nootdorp': {
+    naam: 'Pijnacker-Nootdorp',
+    ozbPercentage: 0.0736,
+    rioolheffingJaar: 195.72,
+    afvalstoffenheffingJaar: 423.12,
+    waterschap: delfland,
   },
 };
