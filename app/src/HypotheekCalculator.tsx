@@ -4,6 +4,34 @@ import { getLtvKey } from './providers/rate-engine';
 import config from './user-config';
 import { berekenHuishoudNettoMaand, HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven, berekenWaterschapJaar } from './gemeente-tarieven';
+import {
+  LOOPTIJD_JAREN,
+  LOOPTIJD_MAANDEN,
+  MAANDEN_PER_RENTEPERIODE,
+  LOONINDEXATIE,
+  WONING_INDEXATIE,
+  RENTE_VERGELIJKING_STAP,
+  NHG_GRENS,
+  NHG_GRENS_VERDUURZAMING,
+  NHG_PREMIE_PERCENTAGE,
+  EIGENWONINGFORFAIT_PERCENTAGE,
+  OVERDRACHTSBELASTING_PERCENTAGE,
+  STARTERSVRIJSTELLING_GRENS,
+  NOTARIS_TRANSPORTAKTE,
+  NOTARIS_HYPOTHEEKAKTE,
+  KADASTERKOSTEN,
+  TAXATIEKOSTEN,
+  BOUWKUNDIGE_KEURING,
+  BANKGARANTIE_PERCENTAGE,
+  VERKOOP_MAKELAAR_PERCENTAGE,
+  VERKOOP_STYLING_FOTOS,
+  VERKOOP_ENERGIELABEL,
+  VERKOOP_NOTARIS_ROYEMENT,
+  VERKOOP_KADASTER,
+  VERKOOP_KORTING_PERCENTAGE,
+  VERKOOP_OPKNAPPEN,
+  AANGENOMEN_BODEM_MARKTRENTE,
+} from './constants';
 
 // Bereken totale rente over de looptijd (pure functie)
 function berekenTotaleRente(
@@ -38,7 +66,7 @@ function berekenTotaleRente(
       restschuld -= hypotheekBedrag / aantalMaanden;
     }
 
-    if (maand % 60 === 0) {
+    if (maand % MAANDEN_PER_RENTEPERIODE === 0) {
       rentePerPeriode.push({ jaren: maand / 12, rente: periodeRente });
       periodeRente = 0;
     }
@@ -61,7 +89,6 @@ interface JaarContext {
   jijMaxUren: number;
   partnerMaxUren: number;
   woningwaarde: number;
-  woningIndexatie: number;
   hypotheekType: string;
   gemeenteData: {
     ozbPercentage: number;
@@ -76,7 +103,7 @@ interface JaarContext {
 function berekenJaarSituatiePure(jaar: number, hypotheekBedrag: number, rente: number, ctx: JaarContext) {
   const jarenSindsStart = jaar - ctx.startJaar;
 
-  const indexering = Math.pow(1.02, jarenSindsStart); // 2% per jaar
+  const indexering = Math.pow(1 + LOONINDEXATIE, jarenSindsStart);
 
   let jijBasis = ctx.brutoJaarJij * indexering;
   const partnerBasis = ctx.brutoJaarPartner * indexering;
@@ -101,12 +128,12 @@ function berekenJaarSituatiePure(jaar: number, hypotheekBedrag: number, rente: n
   const totaalBrutoJaar = jijBrutoJaar + partnerBrutoJaar;
 
   // === HYPOTHEEK & WOONLASTEN ===
-  const totaalAfgelost = (hypotheekBedrag / 30) * jarenSindsStart;
+  const totaalAfgelost = (hypotheekBedrag / LOOPTIJD_JAREN) * jarenSindsStart;
   const restschuld = hypotheekBedrag - totaalAfgelost;
-  const woningwaardeNu = ctx.woningwaarde * Math.pow(1 + ctx.woningIndexatie, jarenSindsStart);
+  const woningwaardeNu = ctx.woningwaarde * Math.pow(1 + WONING_INDEXATIE, jarenSindsStart);
 
   // Eigenwoningforfait (0.35% van WOZ-waarde)
-  const eigenwoningforfait = woningwaardeNu * 0.0035;
+  const eigenwoningforfait = woningwaardeNu * EIGENWONINGFORFAIT_PERCENTAGE;
 
   const hraPercentage = HRA_MAX_TARIEF;
 
@@ -115,10 +142,11 @@ function berekenJaarSituatiePure(jaar: number, hypotheekBedrag: number, rente: n
   let brutoMaandlast: number;
 
   if (ctx.hypotheekType === 'annuitair') {
-    const annuiteitFactor = (maandRente * Math.pow(1 + maandRente, 360)) / (Math.pow(1 + maandRente, 360) - 1);
+    const annuiteitFactor =
+      (maandRente * Math.pow(1 + maandRente, LOOPTIJD_MAANDEN)) / (Math.pow(1 + maandRente, LOOPTIJD_MAANDEN) - 1);
     brutoMaandlast = hypotheekBedrag * annuiteitFactor;
   } else {
-    const maandAflossing = hypotheekBedrag / 360;
+    const maandAflossing = hypotheekBedrag / LOOPTIJD_MAANDEN;
     brutoMaandlast = maandAflossing + restschuld * maandRente;
   }
 
@@ -234,31 +262,11 @@ export default function HypotheekCalculator() {
   const [opstalverzekeringMaand, setOpstalverzekeringMaand] = useState(config.opstalverzekeringMaand);
   const [onderhoudspercentage, setOnderhoudspercentage] = useState(0.75); // 0.75% conservatieve vuistregel
 
-  // === CONSTANTEN ===
+  // === AFGELEIDE WAARDEN UIT CONFIG ===
   const startJaar = config.startJaar;
   const totaalSpaargeld = config.spaargeldJij + config.spaargeldPartner;
   const jijInlegRatio = config.inlegPercentageJij / 100;
   const partnerInlegRatio = 1 - jijInlegRatio;
-  const woningIndexatie = 0.03; // 3% per jaar
-  const NHG_GRENS_2026 = 470000; // NHG grens 2026 - geldt voor WONINGWAARDE, niet hypotheekbedrag
-  const NHG_GRENS_VERDUURZAMING = 498200; // Met energiebesparende voorzieningen
-
-  // === KOSTEN KOPER TARIEVEN (2025) ===
-  const NOTARIS_TRANSPORTAKTE = 850;
-  const NOTARIS_HYPOTHEEKAKTE = 800;
-  const KADASTERKOSTEN = 150;
-  const TAXATIEKOSTEN = 650;
-  const BOUWKUNDIGE_KEURING = 400;
-  // Bankgarantie: 1% van waarborgsom (10% van koopsom) = 0.1% van woningwaarde
-
-  // === VERKOOPKOSTEN BIJ SCHEIDING ===
-  const VERKOOP_MAKELAAR_PERCENTAGE = 0.015; // 1.5%
-  const VERKOOP_STYLING_FOTOS = 750;
-  const VERKOOP_ENERGIELABEL = 350;
-  const VERKOOP_NOTARIS_ROYEMENT = 500;
-  const VERKOOP_KADASTER = 100;
-  const VERKOOP_KORTING_PERCENTAGE = 0.03; // 3% minder dan marktwaarde bij snelle verkoop
-  const VERKOOP_OPKNAPPEN = 1500;
 
   const gemeenteData = gemeenteTarieven[gemeente];
 
@@ -283,7 +291,6 @@ export default function HypotheekCalculator() {
       jijMaxUren: config.jijMaxUren,
       partnerMaxUren: config.partnerMaxUren,
       woningwaarde,
-      woningIndexatie,
       hypotheekType,
       gemeenteData,
       opstalverzekeringMaand,
@@ -300,7 +307,6 @@ export default function HypotheekCalculator() {
       jijUrenNaMinderWerken,
       partnerUrenNaMinderWerken,
       woningwaarde,
-      woningIndexatie,
       hypotheekType,
       gemeenteData,
       opstalverzekeringMaand,
@@ -311,8 +317,8 @@ export default function HypotheekCalculator() {
   // === HOOFDBEREKENING ===
   const berekening = useMemo(() => {
     // Kosten koper - gedetailleerde breakdown
-    const heeftStartersvrijstelling = woningwaarde <= 555000;
-    const overdrachtsbelasting = heeftStartersvrijstelling ? 0 : woningwaarde * 0.02;
+    const heeftStartersvrijstelling = woningwaarde <= STARTERSVRIJSTELLING_GRENS;
+    const overdrachtsbelasting = heeftStartersvrijstelling ? 0 : woningwaarde * OVERDRACHTSBELASTING_PERCENTAGE;
 
     // Kosten koper detail
     const kostenKoperDetail = {
@@ -323,7 +329,7 @@ export default function HypotheekCalculator() {
 
       // Advies & keuring
       taxatie: TAXATIEKOSTEN,
-      bankgarantie: Math.round(woningwaarde * 0.001), // 1% van 10% waarborgsom
+      bankgarantie: Math.round(woningwaarde * BANKGARANTIE_PERCENTAGE),
       bouwkundigeKeuring: heeftBouwkundigeKeuring ? BOUWKUNDIGE_KEURING : 0,
       makelaarskosten: heeftAankoopmakelaar ? makelaarsKosten : 0,
 
@@ -349,8 +355,8 @@ export default function HypotheekCalculator() {
     const hypotheekBedrag = woningwaarde - eigenInlegHuis;
 
     // NHG - grens geldt voor WONINGWAARDE, niet hypotheekbedrag
-    const heeftNHG = woningwaarde <= NHG_GRENS_2026;
-    const nhgPremie = heeftNHG ? hypotheekBedrag * 0.004 : 0; // 0.4%
+    const heeftNHG = woningwaarde <= NHG_GRENS;
+    const nhgPremie = heeftNHG ? hypotheekBedrag * NHG_PREMIE_PERCENTAGE : 0;
     const nhgMetVerduurzaming = woningwaarde <= NHG_GRENS_VERDUURZAMING;
 
     // Totale kosten koper (inclusief NHG-premie)
@@ -376,9 +382,19 @@ export default function HypotheekCalculator() {
     const rente = provider.berekenRente({ ltv, heeftNHG, energielabel, rentevastePeriode });
 
     // === TOTALE RENTE BEREKENING ===
-    const renteBerekening = berekenTotaleRente(hypotheekBedrag, rente, 30, hypotheekType);
-    const renteLager = berekenTotaleRente(hypotheekBedrag, rente - 0.2, 30, hypotheekType);
-    const renteHoger = berekenTotaleRente(hypotheekBedrag, rente + 0.2, 30, hypotheekType);
+    const renteBerekening = berekenTotaleRente(hypotheekBedrag, rente, LOOPTIJD_JAREN, hypotheekType);
+    const renteLager = berekenTotaleRente(
+      hypotheekBedrag,
+      rente - RENTE_VERGELIJKING_STAP,
+      LOOPTIJD_JAREN,
+      hypotheekType,
+    );
+    const renteHoger = berekenTotaleRente(
+      hypotheekBedrag,
+      rente + RENTE_VERGELIJKING_STAP,
+      LOOPTIJD_JAREN,
+      hypotheekType,
+    );
 
     // Rente eerste 10 jaar
     const renteEerste10Jaar = renteBerekening.rentePerPeriode.slice(0, 2).reduce((sum, p) => sum + p.rente, 0);
@@ -397,9 +413,9 @@ export default function HypotheekCalculator() {
     // Scheidingsberekening
     let scheidingResultaat = null;
     if (jarenTotScheiding > 0) {
-      const afgelostBijScheiding = (hypotheekBedrag / 30) * jarenTotScheiding;
+      const afgelostBijScheiding = (hypotheekBedrag / LOOPTIJD_JAREN) * jarenTotScheiding;
       const restschuldBijScheiding = hypotheekBedrag - afgelostBijScheiding;
-      const woningwaardeBijScheiding = woningwaarde * Math.pow(1 + woningIndexatie, jarenTotScheiding);
+      const woningwaardeBijScheiding = woningwaarde * Math.pow(1 + WONING_INDEXATIE, jarenTotScheiding);
       const overwaardebruto = woningwaardeBijScheiding - restschuldBijScheiding;
 
       // Verkoopkosten berekenen
@@ -407,8 +423,7 @@ export default function HypotheekCalculator() {
       const verkoopprijs = woningwaardeBijScheiding - verkoopkorting;
       const makelaarskosten = verkoopprijs * VERKOOP_MAKELAAR_PERCENTAGE;
 
-      // Boeterente (conservatief: aanname marktrente daalt naar 2%)
-      const AANGENOMEN_BODEM_MARKTRENTE = 2; // Historisch dieptepunt NL hypotheekrentes
+      // Boeterente (conservatief: aanname marktrente daalt naar historisch dieptepunt)
       const boetevrijPercentage = provider.voorwaarden?.boetevrijAflossenPercentage ?? 10;
       const resterendeRentevasteJaren = Math.max(0, rentevastePeriode - jarenTotScheiding);
       const renteVerschil = Math.max(0, rente - AANGENOMEN_BODEM_MARKTRENTE);
@@ -540,7 +555,6 @@ export default function HypotheekCalculator() {
     totaalSpaargeld,
     jijInlegRatio,
     partnerInlegRatio,
-    woningIndexatie,
     jaarCtx,
   ]);
 
@@ -1320,7 +1334,9 @@ export default function HypotheekCalculator() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Startersvrijstelling:</span>
                 <span className={berekening.heeftStartersvrijstelling ? 'text-green-600' : 'text-red-600'}>
-                  {berekening.heeftStartersvrijstelling ? `Ja (${formatBedrag(woningwaarde * 0.02)} bespaard)` : 'Nee'}
+                  {berekening.heeftStartersvrijstelling
+                    ? `Ja (${formatBedrag(woningwaarde * OVERDRACHTSBELASTING_PERCENTAGE)} bespaard)`
+                    : 'Nee'}
                 </span>
               </div>
               <div className="flex justify-between">
