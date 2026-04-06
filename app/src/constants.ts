@@ -1,3 +1,8 @@
+// === TARIEFVERSIES ===
+// Werk deze bij bij de jaarwisseling samen met de tarieven hieronder
+export const BELASTINGJAAR = 2026;
+export const GEMEENTE_TARIEVEN_JAAR = 2026;
+
 // === HYPOTHEEK ===
 export const LOOPTIJD_JAREN = 30;
 export const LOOPTIJD_MAANDEN = LOOPTIJD_JAREN * 12; // 360
@@ -8,11 +13,13 @@ export const WONING_INDEXATIE = 0.03; // 3% per jaar
 export const RENTE_VERGELIJKING_STAP = 0.2; // ±0.2% voor rentevergelijking
 
 // === NHG (Nationale Hypotheek Garantie) 2026 ===
+// Bron: https://www.nhg.nl/consument/voorwaarden-en-normen/
 export const NHG_GRENS = 470_000; // Geldt voor WONINGWAARDE, niet hypotheekbedrag
 export const NHG_GRENS_VERDUURZAMING = 498_200; // Met energiebesparende voorzieningen
 export const NHG_PREMIE_PERCENTAGE = 0.004; // 0.4%
 
 // === BELASTING ===
+// Bron: https://www.belastingdienst.nl/wps/wcm/connect/nl/koopwoning/
 export const EIGENWONINGFORFAIT_PERCENTAGE = 0.0035; // 0.35% van WOZ-waarde
 export const OVERDRACHTSBELASTING_PERCENTAGE = 0.02; // 2%
 export const STARTERSVRIJSTELLING_GRENS = 555_000; // Geen overdrachtsbelasting onder deze grens

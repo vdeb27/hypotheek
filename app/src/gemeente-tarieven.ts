@@ -1,4 +1,6 @@
 // === GEMEENTE & WATERSCHAP TARIEVEN 2026 ===
+// Bronnen: websites van gemeenten en waterschappen (belastingtarieven/verordeningen)
+// Waterschappen: https://www.waterschappen.nl/
 
 export type WaterschapTarieven = {
   naam: string;

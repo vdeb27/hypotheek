@@ -1,5 +1,6 @@
 // Nederlandse inkomstenbelasting 2026 (Box 1)
-// Bron: belastingdienst.nl
+// Bron: https://www.belastingdienst.nl/wps/wcm/connect/nl/werk-en-inkomen/
+// Bron heffingskortingen: https://www.belastingdienst.nl/wps/wcm/connect/nl/heffingskortingen/
 
 export interface BelastingResultaat {
   brutoJaar: number;
