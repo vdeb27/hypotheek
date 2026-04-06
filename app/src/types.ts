@@ -20,6 +20,9 @@ export interface GebruikersConfig {
   partnerUrenNaMinderWerken: number;
   promotieOpslagPercentage: number; // Bruto-opslag bij promotie (bijv. 15 = 15%)
 
+  // Huishouden
+  heeftPartner?: boolean; // true = samen kopen, false = alleen kopen (default: true)
+
   // Overig
   startJaar: number;
   gemeente: string;

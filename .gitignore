@@ -5,7 +5,7 @@ app/node_modules/
 app/dist/
 
 # Persoonlijke configuratie (bevat financiele gegevens)
-app/src/user-config.ts
+app/src/user-config.json
 
 # Bronbestanden rentetarieven
 *.pdf
