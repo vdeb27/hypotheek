@@ -5,6 +5,7 @@ import { gemeenteTarieven } from '../gemeente-tarieven';
 import type { GemeenteTarieven } from '../gemeente-tarieven';
 import { BOUWKUNDIGE_KEURING } from '../constants';
 import { formatBedrag, formatPercentage } from '../lib/formatters';
+import Tooltip from './Tooltip';
 
 interface InvoerKolomProps {
   // Woning & Hypotheek
@@ -81,10 +82,10 @@ export default function InvoerKolom({
   ltv,
 }: InvoerKolomProps) {
   return (
-    <div className="space-y-4">
+    <section aria-label="Invoer" className="space-y-4">
       {/* Woning & Financiën */}
-      <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-        <h2 className="font-semibold text-blue-800">Woning & Hypotheek</h2>
+      <fieldset className="bg-blue-50 p-4 rounded-lg space-y-3">
+        <legend className="font-semibold text-blue-800">Woning & Hypotheek</legend>
 
         <div>
           <label className="block text-gray-700 mb-1">
@@ -93,22 +94,23 @@ export default function InvoerKolom({
           <input
             type="range"
             min={400000}
-            max={700000}
+            max={900000}
             step={5000}
             value={woningwaarde}
             onChange={(e) => setWoningwaarde(Number(e.target.value))}
+            aria-valuetext={formatBedrag(woningwaarde)}
             className="w-full h-2"
           />
-          <div className="flex justify-between text-xs text-gray-400">
+          <div className="flex justify-between text-xs text-gray-400" aria-hidden="true">
             <span>€400k</span>
             <span className="text-blue-600">€555k (starter)</span>
-            <span>€700k</span>
+            <span>€900k</span>
           </div>
         </div>
 
         <div>
           <label className="block text-gray-700 mb-1">
-            Buffer aanhouden: <span className="font-medium">{formatBedrag(buffer)}</span>
+            Buffer<Tooltip term="buffer" /> aanhouden: <span className="font-medium">{formatBedrag(buffer)}</span>
           </label>
           <input
             type="range"
@@ -117,6 +119,7 @@ export default function InvoerKolom({
             step={5000}
             value={buffer}
             onChange={(e) => setBuffer(Number(e.target.value))}
+            aria-valuetext={formatBedrag(buffer)}
             className="w-full h-2"
           />
           <div className="flex justify-between text-xs text-gray-400">
@@ -153,11 +156,12 @@ export default function InvoerKolom({
         </div>
 
         <div>
-          <label className="block text-gray-600 text-xs mb-1">Hypotheektype</label>
+          <label className="block text-gray-600 text-xs mb-1">Hypotheektype<Tooltip term="hypotheektype" /></label>
           <div className="flex rounded-lg border overflow-hidden">
             <button
               onClick={() => setHypotheekType('annuitair')}
-              className={`flex-1 py-2 px-3 text-sm transition-colors ${
+              aria-pressed={hypotheekType === 'annuitair'}
+              className={`flex-1 py-2 px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 hypotheekType === 'annuitair' ? 'bg-blue-600 text-white font-medium' : 'bg-white hover:bg-gray-50'
               }`}
             >
@@ -165,7 +169,8 @@ export default function InvoerKolom({
             </button>
             <button
               onClick={() => setHypotheekType('lineair')}
-              className={`flex-1 py-2 px-3 text-sm transition-colors border-l ${
+              aria-pressed={hypotheekType === 'lineair'}
+              className={`flex-1 py-2 px-3 text-sm transition-colors border-l focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 hypotheekType === 'lineair' ? 'bg-blue-600 text-white font-medium' : 'bg-white hover:bg-gray-50'
               }`}
             >
@@ -176,7 +181,7 @@ export default function InvoerKolom({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-gray-600 text-xs mb-1">Energielabel</label>
+            <label className="block text-gray-600 text-xs mb-1">Energielabel<Tooltip term="energielabel" /></label>
             <select
               value={energielabel}
               onChange={(e) => setEnergielabel(e.target.value)}
@@ -192,7 +197,7 @@ export default function InvoerKolom({
             </select>
           </div>
           <div>
-            <label className="block text-gray-600 text-xs mb-1">Rentevaste periode</label>
+            <label className="block text-gray-600 text-xs mb-1">Rentevaste periode<Tooltip term="rentevastePeriode" /></label>
             <select
               value={rentevastePeriode}
               onChange={(e) => setRentevastePeriode(Number(e.target.value))}
@@ -219,6 +224,7 @@ export default function InvoerKolom({
           <div className="flex justify-between text-xs mt-1">
             <span className={heeftNHG ? 'text-green-600' : 'text-gray-400'}>
               {heeftNHG ? '✓ NHG mogelijk' : '✗ Geen NHG'}
+              <Tooltip term="nhg" />
             </span>
             {laatstBijgewerkt && (
               <span className="text-gray-400">
@@ -243,11 +249,11 @@ export default function InvoerKolom({
             <p className="text-xs text-green-600 mt-1">{provider.voorwaarden.toelichting}</p>
           )}
         </div>
-      </div>
+      </fieldset>
 
       {/* Kosten Koper Opties */}
-      <div className="bg-slate-50 p-4 rounded-lg space-y-3">
-        <h2 className="font-semibold text-slate-800">Kosten Koper Opties</h2>
+      <fieldset className="bg-slate-50 p-4 rounded-lg space-y-3">
+        <legend className="font-semibold text-slate-800">Kosten Koper Opties</legend>
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -290,11 +296,11 @@ export default function InvoerKolom({
             </div>
           </div>
         )}
-      </div>
+      </fieldset>
 
       {/* Woonlasten & Heffingen */}
-      <div className="bg-cyan-50 p-4 rounded-lg space-y-3">
-        <h2 className="font-semibold text-cyan-800">Woonlasten & Heffingen</h2>
+      <fieldset className="bg-cyan-50 p-4 rounded-lg space-y-3">
+        <legend className="font-semibold text-cyan-800">Woonlasten & Heffingen</legend>
 
         <div>
           <label className="block text-gray-600 text-xs mb-1">Gemeente</label>
@@ -321,7 +327,7 @@ export default function InvoerKolom({
         {toonGemeenteTarieven && (
           <div className="bg-white rounded p-2 text-xs space-y-1">
             <div className="flex justify-between">
-              <span>OZB:</span>
+              <span>OZB<Tooltip term="ozb" />:</span>
               <span>{gemeenteData.ozbPercentage}% van WOZ</span>
             </div>
             <div className="flex justify-between">
@@ -383,7 +389,7 @@ export default function InvoerKolom({
             <span>2%</span>
           </div>
         </div>
-      </div>
-    </div>
+      </fieldset>
+    </section>
   );
 }

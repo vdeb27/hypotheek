@@ -1,8 +1,9 @@
-import config from '../user-config';
+import { config } from '../lib/config-loader';
 import type { GemeenteTarieven } from '../gemeente-tarieven';
 import type { JaarSituatie } from '../lib/berekeningen';
 import { OVERDRACHTSBELASTING_PERCENTAGE } from '../constants';
 import { formatBedrag, formatPercentage, getWoonquoteKleur, getWoonquoteTekstKleur } from '../lib/formatters';
+import Tooltip from './Tooltip';
 
 interface KostenKoperDetail {
   notarisTransport: number;
@@ -16,6 +17,7 @@ interface KostenKoperDetail {
 }
 
 interface ResultatenKolomProps {
+  heeftPartner: boolean;
   woningwaarde: number;
   bekijkJaar: number;
   gemeenteData: GemeenteTarieven;
@@ -71,6 +73,7 @@ interface ResultatenKolomProps {
 }
 
 export default function ResultatenKolom({
+  heeftPartner,
   woningwaarde,
   bekijkJaar,
   gemeenteData,
@@ -116,13 +119,13 @@ export default function ResultatenKolom({
   bufferInMaanden,
 }: ResultatenKolomProps) {
   return (
-    <div className="space-y-4">
+    <section aria-label="Resultaten" className="space-y-4">
       {/* Kosten & Hypotheek */}
       <div className="bg-white border-2 border-blue-200 rounded-lg p-4">
         <h2 className="font-semibold text-gray-800 mb-3">Kosten & Hypotheek</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-600">Kosten koper:</span>
+            <span className="text-gray-600">Kosten koper<Tooltip term="kostenKoper" />:</span>
             <span>{formatBedrag(kostenKoperBasis)}</span>
           </div>
 
@@ -175,7 +178,7 @@ export default function ResultatenKolom({
                 <>
                   <p className="font-medium text-gray-600 mt-2 mb-1">Belasting:</p>
                   <div className="flex justify-between pl-2">
-                    <span>Overdrachtsbelasting (2%):</span>
+                    <span>Overdrachtsbelasting<Tooltip term="overdrachtsbelasting" /> (2%):</span>
                     <span>{formatBedrag(overdrachtsbelasting)}</span>
                   </div>
                 </>
@@ -185,7 +188,7 @@ export default function ResultatenKolom({
 
           {heeftNHG && (
             <div className="flex justify-between text-blue-600">
-              <span>NHG-premie (0.4%):</span>
+              <span>NHG-premie<Tooltip term="nhg" /> (0.4%):</span>
               <span>{formatBedrag(nhgPremie)}</span>
             </div>
           )}
@@ -202,7 +205,7 @@ export default function ResultatenKolom({
             <span>{formatBedrag(kostenKoperNetto)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Startersvrijstelling:</span>
+            <span className="text-gray-600">Startersvrijstelling<Tooltip term="startersvrijstelling" />:</span>
             <span className={heeftStartersvrijstelling ? 'text-green-600' : 'text-red-600'}>
               {heeftStartersvrijstelling
                 ? `Ja (${formatBedrag(woningwaarde * OVERDRACHTSBELASTING_PERCENTAGE)} bespaard)`
@@ -218,7 +221,7 @@ export default function ResultatenKolom({
             <span>{formatBedrag(hypotheekBedrag)}</span>
           </div>
           <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>LTV: {formatPercentage(ltv, 1)}</span>
+            <span>LTV<Tooltip term="ltv" />: {formatPercentage(ltv, 1)}</span>
           </div>
         </div>
       </div>
@@ -308,7 +311,7 @@ export default function ResultatenKolom({
 
       {/* Woonlasten */}
       <div
-        className={`border-2 rounded-lg p-4 ${getWoonquoteKleur(situatieBekijkJaar.woonquoteTotaalBruto, situatieBekijkJaar.nibudNorm)}`}
+        className={`border-2 rounded-lg p-4 ${getWoonquoteKleur(situatieBekijkJaar.woonquoteBruto, situatieBekijkJaar.nibudNorm)}`}
       >
         <h2 className="font-semibold text-gray-800 mb-3">Woonlasten {bekijkJaar}</h2>
         <div className="space-y-2 text-sm">
@@ -318,7 +321,7 @@ export default function ResultatenKolom({
             <span>{formatBedrag(situatieBekijkJaar.brutoMaandlast)}/mnd</span>
           </div>
           <div className="flex justify-between text-green-600 text-xs">
-            <span>- HRA voordeel:</span>
+            <span>- HRA voordeel<Tooltip term="hra" />:</span>
             <span>
               -
               {formatBedrag(situatieBekijkJaar.brutoMaandlast - situatieBekijkJaar.nettoMaandlast)}
@@ -376,21 +379,21 @@ export default function ResultatenKolom({
 
           {/* Woonquotes */}
           <div className="space-y-1 pt-1">
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Woonquote (alleen hypotheek):</span>
-              <span>{formatPercentage(situatieBekijkJaar.woonquoteBruto)}</span>
-            </div>
             <div className="flex justify-between font-medium">
-              <span>Woonquote (totaal):</span>
+              <span>Financieringslast<Tooltip term="woonquote" />:</span>
               <span
-                className={`text-lg ${getWoonquoteTekstKleur(situatieBekijkJaar.woonquoteTotaalBruto, situatieBekijkJaar.nibudNorm)}`}
+                className={`text-lg ${getWoonquoteTekstKleur(situatieBekijkJaar.woonquoteBruto, situatieBekijkJaar.nibudNorm)}`}
               >
-                {formatPercentage(situatieBekijkJaar.woonquoteTotaalBruto)}
+                {formatPercentage(situatieBekijkJaar.woonquoteBruto)}
               </span>
             </div>
             <div className="flex justify-between text-gray-500 text-xs">
-              <span>Nibud-norm bij dit inkomen:</span>
-              <span>~{situatieBekijkJaar.nibudNorm}%</span>
+              <span>Nibud-norm<Tooltip term="nibudNorm" /> bij dit inkomen + rente:</span>
+              <span>{situatieBekijkJaar.nibudNorm}%</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Woonquote incl. bijkomende lasten:</span>
+              <span>{formatPercentage(situatieBekijkJaar.woonquoteTotaalBruto)}</span>
             </div>
           </div>
 
@@ -399,18 +402,18 @@ export default function ResultatenKolom({
             <span className="font-medium">{bufferInMaanden.toFixed(1)} maanden</span>
           </div>
         </div>
-        <p className="text-xs mt-3">
-          {situatieBekijkJaar.woonquoteTotaalBruto > situatieBekijkJaar.nibudNorm + 5
-            ? '⚠️ Woonquote boven Nibud-norm'
-            : situatieBekijkJaar.woonquoteTotaalBruto > situatieBekijkJaar.nibudNorm
-              ? '⚡ Woonquote op rand van Nibud-norm'
-              : '✓ Woonquote binnen Nibud-norm'}
+        <p className="text-xs mt-3" role="status">
+          {situatieBekijkJaar.woonquoteBruto > situatieBekijkJaar.nibudNorm + 5
+            ? '⚠️ Financieringslast boven Nibud-norm'
+            : situatieBekijkJaar.woonquoteBruto > situatieBekijkJaar.nibudNorm
+              ? '⚡ Financieringslast op rand van Nibud-norm'
+              : '✓ Financieringslast binnen Nibud-norm'}
         </p>
       </div>
 
       {/* Waarschuwing */}
       {!hypotheekMogelijk && (
-        <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
+        <div role="alert" className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
           <p className="text-red-800 font-medium">
             ⚠️ Met deze buffer houd je niet genoeg over voor de kosten koper. Verhoog de buffer of kies een goedkoper
             huis.
@@ -418,11 +421,12 @@ export default function ResultatenKolom({
         </div>
       )}
 
-      {(inlegWaarschuwingJij || inlegWaarschuwingPartner) && (
-        <div className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
+      {(inlegWaarschuwingJij || (heeftPartner && inlegWaarschuwingPartner)) && (
+        <div role="alert" className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
           <p className="text-yellow-800 font-medium">
-            ⚠️ Het inlegpercentage ({config.inlegPercentageJij}% / {100 - config.inlegPercentageJij}%) past niet bij het
-            beschikbare spaargeld:
+            ⚠️ {heeftPartner
+              ? `Het inlegpercentage (${config.inlegPercentageJij}% / ${100 - config.inlegPercentageJij}%) past niet bij het beschikbare spaargeld:`
+              : 'Je spaargeld is onvoldoende voor de benodigde inleg:'}
           </p>
           <ul className="text-yellow-800 text-sm mt-1 list-disc list-inside">
             {inlegWaarschuwingJij && (
@@ -431,7 +435,7 @@ export default function ResultatenKolom({
                 (tekort: {formatBedrag(bijdrageJij - config.spaargeldJij)})
               </li>
             )}
-            {inlegWaarschuwingPartner && (
+            {heeftPartner && inlegWaarschuwingPartner && (
               <li>
                 Partner moet {formatBedrag(bijdragePartner)} inleggen, maar heeft{' '}
                 {formatBedrag(config.spaargeldPartner)} spaargeld (tekort:{' '}
@@ -441,6 +445,6 @@ export default function ResultatenKolom({
           </ul>
         </div>
       )}
-    </div>
+    </section>
   );
 }
