@@ -28,6 +28,7 @@ describe('createProviderFromCache', () => {
     providerName: 'Test Bank',
     labelId: 1,
     labelName: 'Test Hypotheek',
+    hasAutoRiskClassReduction: false,
     products: [{ name: 'Annuïteiten', mortgageType: 6 }],
     rates: {
       'A:nhg': { 60: 3.5, 120: 3.8, 240: 4.0 },

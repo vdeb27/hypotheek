@@ -34,6 +34,7 @@ interface ApiProvider {
   mortgage_provider_name: string;
   label_id: number;
   label_name: string;
+  has_auto_risk_class_reduction: boolean;
   frts: { frt: number; is_variable: boolean; interest_rate: number | null }[];
   products: { product_id: number; product_name: string; mortgage_type: number }[];
   logo_url?: string;
@@ -44,6 +45,7 @@ interface CachedProvider {
   providerName: string;
   labelId: number;
   labelName: string;
+  hasAutoRiskClassReduction: boolean;
   products: { name: string; mortgageType: number }[];
   // Key = "A:nhg" | "A:60" | "B:nhg" | "C:80" etc.
   rates: Record<string, Record<number, number | null>>;
@@ -142,6 +144,7 @@ async function main() {
             providerName: p.mortgage_provider_name,
             labelId: p.label_id,
             labelName: p.label_name,
+            hasAutoRiskClassReduction: p.has_auto_risk_class_reduction,
             products: p.products.map(pr => ({
               name: pr.product_name,
               mortgageType: pr.mortgage_type,

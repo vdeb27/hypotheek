@@ -10,6 +10,7 @@ export interface CachedProvider {
   providerName: string;
   labelId: number;
   labelName: string;
+  hasAutoRiskClassReduction: boolean;
   products: CachedProduct[];
   /**
    * Rentes per energielabel+LTV-klasse per rentevaste periode (in maanden).

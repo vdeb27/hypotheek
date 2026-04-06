@@ -30,10 +30,11 @@ interface ProviderRij {
   beschikbaarLtv: boolean;
   heeftPeriode: boolean;
   beschikbarePeriodes: number[];
+  heeftDalrente: boolean;
 }
 
-// Alle unieke rentevaste periodes over alle providers (eenmalig berekend)
-const allePeriodes: number[] = (() => {
+/** Alle unieke rentevaste periodes over alle providers. */
+function getAllePeriodes(): number[] {
   const set = new Set<number>();
   for (const p of Object.values(providers)) {
     for (const periode of p.beschikbarePeriodes) {
@@ -41,7 +42,7 @@ const allePeriodes: number[] = (() => {
     }
   }
   return [...set].sort((a, b) => a - b);
-})();
+}
 
 function formatPeriodes(periodes: number[]): string {
   return periodes
@@ -63,6 +64,7 @@ export default function HypotheekKolom({
   provider,
 }: HypotheekKolomProps) {
   const ltvKey = getLtvKey(ltv, heeftNHG);
+  const allePeriodes = useMemo(getAllePeriodes, [providers]);
 
   // Bouw vergelijkingstabel: alle providers, uitgegrijsd als LTV of periode niet matcht
   const vergelijking = useMemo((): ProviderRij[] => {
@@ -87,6 +89,7 @@ export default function HypotheekKolom({
         beschikbaarLtv,
         heeftPeriode,
         beschikbarePeriodes: p.beschikbarePeriodes,
+        heeftDalrente: p.heeftDalrente,
       });
     }
 
@@ -160,6 +163,7 @@ export default function HypotheekKolom({
               <tr className="border-b text-gray-500">
                 <th className="text-left py-1 pr-1">Aanbieder</th>
                 <th className="text-right py-1 px-1">Rente</th>
+                <th className="text-center py-1 pl-1 w-5" title="Dalrente: rente daalt automatisch mee als marktrente daalt vóór passeren">&#x25BC;</th>
               </tr>
             </thead>
             <tbody>
@@ -185,6 +189,9 @@ export default function HypotheekKolom({
                     </td>
                     <td className="text-right py-1.5 px-1 font-mono">
                       {formatPercentage(rij.rente, 2)}
+                    </td>
+                    <td className="text-center py-1.5 pl-1">
+                      {rij.heeftDalrente && <span title="Dalrente: rente daalt automatisch mee vóór passeren">&#x25BC;</span>}
                     </td>
                   </tr>
                 );
@@ -219,6 +226,9 @@ export default function HypotheekKolom({
               Beschikbaar: {formatPeriodes(provider.beschikbarePeriodes)}.
               Getoond tarief is voor de dichtstbijzijnde periode.
             </p>
+          )}
+          {provider.heeftDalrente && (
+            <p className="text-xs text-green-600">&#x25BC; Dalrente: rente daalt automatisch mee als marktrente daalt vóór passeren</p>
           )}
           {provider.voorwaarden?.toelichting && (
             <p className="text-xs text-green-600">{provider.voorwaarden.toelichting}</p>

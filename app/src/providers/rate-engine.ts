@@ -67,6 +67,7 @@ export function createProviderFromCache(data: CachedProvider): MortgageProvider 
     bank: data.providerName,
     beschikbarePeriodes,
     laatstBijgewerkt: undefined,
+    heeftDalrente: data.hasAutoRiskClassReduction ?? false,
     beschikbareLtvKlassen: [
       ...new Set(
         Object.keys(data.rates)
