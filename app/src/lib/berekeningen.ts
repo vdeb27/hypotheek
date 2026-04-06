@@ -1,6 +1,7 @@
 import type { WaterschapTarieven } from '../gemeente-tarieven';
 import { berekenHuishoudNettoMaand, HRA_MAX_TARIEF } from '../belasting';
 import { berekenWaterschapJaar } from '../gemeente-tarieven';
+import { zoekFinancieringslastpercentage } from './nibud-normen';
 import {
   LOOPTIJD_JAREN,
   LOOPTIJD_MAANDEN,
@@ -159,7 +160,8 @@ export function berekenJaarSituatiePure(jaar: number, hypotheekBedrag: number, r
   const woonquoteTotaalBruto = ((totaleWoonlastenBrutoMaand * 12) / totaalBrutoJaar) * 100;
   const woonquoteTotaalNetto = (totaleWoonlastenNettoMaand / nettoInkomenMaand) * 100;
 
-  const nibudNorm = totaalBrutoJaar > 100000 ? 24 : totaalBrutoJaar > 70000 ? 26 : 28;
+  // Nibud financieringslastpercentage: maximale bruto hypotheeklasten als % van toetsinkomen
+  const nibudNorm = zoekFinancieringslastpercentage(totaalBrutoJaar, rente);
 
   return {
     jijMaandloon,
