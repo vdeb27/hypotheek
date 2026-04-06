@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { providers, laatstBijgewerkt } from './providers';
-import config from './user-config';
+import { config, isDefaultConfig } from './lib/config-loader';
+import ConfigOnboarding from './components/ConfigOnboarding';
 import { HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven } from './gemeente-tarieven';
 import {
@@ -26,7 +27,11 @@ import {
   VERKOOP_OPKNAPPEN,
   AANGENOMEN_BODEM_MARKTRENTE,
   WONING_INDEXATIE,
+  BELASTINGJAAR,
+  GEMEENTE_TARIEVEN_JAAR,
 } from './constants';
+import { isTariefVerouderd, dagenOud } from './lib/staleness';
+import { NIBUD_NORMEN_JAAR } from './lib/nibud-normen';
 import { berekenTotaleRente, berekenJaarSituatiePure } from './lib/berekeningen';
 import type { JaarContext } from './lib/berekeningen';
 import InvoerKolom from './components/InvoerKolom';
@@ -35,6 +40,12 @@ import ResultatenKolom from './components/ResultatenKolom';
 import JaarlijkseTabel from './components/JaarlijkseTabel';
 
 export default function HypotheekCalculator() {
+  const [gebruikStandaard, setGebruikStandaard] = useState(false);
+
+  if (isDefaultConfig && !gebruikStandaard) {
+    return <ConfigOnboarding onGebruikStandaard={() => setGebruikStandaard(true)} />;
+  }
+
   // === WONING & HYPOTHEEK ===
   const [woningwaarde, setWoningwaarde] = useState(config.woningwaarde);
   const [buffer, setBuffer] = useState(config.buffer);
@@ -53,6 +64,9 @@ export default function HypotheekCalculator() {
   const [partnerUrenNaMinderWerken, setPartnerUrenNaMinderWerken] = useState(config.partnerUrenNaMinderWerken);
   const [promotieJaar, setPromotieJaar] = useState<number | null>(null);
   const [promotieOpslag, setPromotieOpslag] = useState(config.promotieOpslagPercentage);
+
+  // === HUISHOUDEN ===
+  const [heeftPartner, setHeeftPartner] = useState(config.heeftPartner ?? config.brutoJaarinkomenPartner > 0);
 
   // === INKOMEN ===
   const [brutoJaarJij, setBrutoJaarJij] = useState(config.brutoJaarinkomenJij);
@@ -81,9 +95,10 @@ export default function HypotheekCalculator() {
 
   // === AFGELEIDE WAARDEN ===
   const startJaar = config.startJaar;
-  const totaalSpaargeld = config.spaargeldJij + config.spaargeldPartner;
-  const jijInlegRatio = config.inlegPercentageJij / 100;
+  const totaalSpaargeld = config.spaargeldJij + (heeftPartner ? config.spaargeldPartner : 0);
+  const jijInlegRatio = heeftPartner ? config.inlegPercentageJij / 100 : 1;
   const partnerInlegRatio = 1 - jijInlegRatio;
+  const effectiefBrutoJaarPartner = heeftPartner ? brutoJaarPartner : 0;
   const gemeenteData = gemeenteTarieven[gemeente];
   const jaren = Array.from({ length: 30 }, (_, i) => startJaar + i);
   const provider = providers[hypotheekProduct];
@@ -93,7 +108,7 @@ export default function HypotheekCalculator() {
     () => ({
       startJaar,
       brutoJaarJij,
-      brutoJaarPartner,
+      brutoJaarPartner: effectiefBrutoJaarPartner,
       promotieJaar,
       promotieOpslag,
       jijMinderWerkenJaar,
@@ -111,7 +126,7 @@ export default function HypotheekCalculator() {
     [
       startJaar,
       brutoJaarJij,
-      brutoJaarPartner,
+      effectiefBrutoJaarPartner,
       promotieJaar,
       promotieOpslag,
       jijMinderWerkenJaar,
@@ -332,19 +347,29 @@ export default function HypotheekCalculator() {
 
   // === RENDER ===
   return (
-    <div className="p-4 max-w-6xl mx-auto space-y-4 text-sm">
+    <main className="p-2 sm:p-4 max-w-7xl mx-auto space-y-4 text-sm">
       {/* Header */}
-      <div className="border-b pb-3">
+      <header className="border-b pb-3">
         <h1 className="text-xl font-bold text-gray-800">Hypotheek Scenario Calculator</h1>
         <p className="text-gray-500 text-xs mt-1">
           {laatstBijgewerkt
             ? `${Object.keys(providers).length} hypotheekproducten · Tarieven van ${new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`
             : 'ASN Bank tarieven (fallback)'}{' '}
-          · Inclusief NHG-premie, HRA en woningindexatie
+          · Belastingtarieven {BELASTINGJAAR} · Inclusief NHG-premie, HRA en woningindexatie
         </p>
-      </div>
+        {isTariefVerouderd(laatstBijgewerkt) && (
+          <p role="alert" className="text-xs mt-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded inline-block">
+            ⚠ Rentetarieven zijn {dagenOud(laatstBijgewerkt) ?? '?'} dagen oud — voer <code className="bg-yellow-200 px-1 rounded">npm run update-rentes</code> uit om bij te werken
+          </p>
+        )}
+        {new Date().getFullYear() > BELASTINGJAAR && (
+          <p role="alert" className="text-xs mt-1 px-2 py-1 bg-orange-100 text-orange-800 rounded inline-block">
+            ⚠ Belastingtarieven zijn van {BELASTINGJAAR} — controleer of er nieuwe tarieven beschikbaar zijn
+          </p>
+        )}
+      </header>
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Kolom 1: Invoer */}
         <InvoerKolom
           woningwaarde={woningwaarde}
@@ -382,6 +407,8 @@ export default function HypotheekCalculator() {
 
         {/* Kolom 2: Carrière & Scenario's */}
         <CarriereKolom
+          heeftPartner={heeftPartner}
+          setHeeftPartner={setHeeftPartner}
           brutoJaarJij={brutoJaarJij}
           setBrutoJaarJij={setBrutoJaarJij}
           brutoJaarPartner={brutoJaarPartner}
@@ -411,6 +438,7 @@ export default function HypotheekCalculator() {
 
         {/* Kolom 3: Resultaten */}
         <ResultatenKolom
+          heeftPartner={heeftPartner}
           woningwaarde={woningwaarde}
           bekijkJaar={bekijkJaar}
           gemeenteData={gemeenteData}
@@ -469,10 +497,10 @@ export default function HypotheekCalculator() {
       />
 
       {/* Footer */}
-      <p className="text-gray-400 text-center text-xs">
-        Indicatieve berekeningen · 2% loonstijging/jaar · 3% woningindexatie/jaar · Nibud-norm ~24% bij €100k+ bruto ·
-        Bespreek altijd met je hypotheekadviseur
-      </p>
-    </div>
+      <footer className="text-gray-400 text-center text-xs">
+        Indicatieve berekeningen · 2% loonstijging/jaar · 3% woningindexatie/jaar ·
+        Nibud financieringslastnormen {NIBUD_NORMEN_JAAR} · Belastingtarieven {BELASTINGJAAR} · Gemeentetarieven {GEMEENTE_TARIEVEN_JAAR} · Bespreek altijd met je hypotheekadviseur
+      </footer>
+    </main>
   );
 }

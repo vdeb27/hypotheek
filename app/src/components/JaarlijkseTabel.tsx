@@ -22,14 +22,14 @@ export default function JaarlijkseTabel({
     <div className="bg-gray-50 p-4 rounded-lg">
       <h2 className="font-semibold text-gray-800 mb-3">Overzicht per jaar</h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[600px]">
           <thead>
             <tr className="border-b bg-gray-100">
               <th className="text-left p-2">Jaar</th>
               <th className="text-right p-2">Jij</th>
               <th className="text-right p-2">Partner</th>
               <th className="text-right p-2">Bruto/jaar</th>
-              <th className="text-right p-2">Woonquote</th>
+              <th className="text-right p-2">Fin.last</th>
               <th className="text-right p-2">Woonlasten/jaar</th>
               <th className="text-right p-2">Eigen vermogen</th>
             </tr>
@@ -61,6 +61,7 @@ export default function JaarlijkseTabel({
                     className={`text-right p-2 font-medium ${getWoonquoteTekstKleur(situatie.woonquoteBruto, situatie.nibudNorm)}`}
                   >
                     {formatPercentage(situatie.woonquoteBruto)}
+                    <span className="text-gray-400 text-xs font-normal ml-1">(norm {situatie.nibudNorm}%)</span>
                   </td>
                   <td className="text-right p-2">{formatBedrag(situatie.brutoMaandlast * 12)}</td>
                   <td className="text-right p-2 text-green-700 font-medium">

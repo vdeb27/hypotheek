@@ -1,6 +1,7 @@
-import config from '../user-config';
+import { config } from '../lib/config-loader';
 import type { JaarSituatie } from '../lib/berekeningen';
 import { formatBedrag } from '../lib/formatters';
+import Tooltip from './Tooltip';
 
 interface ScheidingResultaat {
   jarenTotScheiding: number;
@@ -31,6 +32,10 @@ interface ScheidingResultaat {
 }
 
 interface CarriereKolomProps {
+  // Huishouden
+  heeftPartner: boolean;
+  setHeeftPartner: (b: boolean) => void;
+
   // Inkomen
   brutoJaarJij: number;
   setBrutoJaarJij: (n: number) => void;
@@ -68,6 +73,8 @@ interface CarriereKolomProps {
 }
 
 export default function CarriereKolom({
+  heeftPartner,
+  setHeeftPartner,
   brutoJaarJij,
   setBrutoJaarJij,
   brutoJaarPartner,
@@ -95,22 +102,40 @@ export default function CarriereKolom({
   situatieBekijkJaar,
 }: CarriereKolomProps) {
   return (
-    <div className="space-y-4">
+    <section aria-label="Carrière & Scenario's" className="space-y-4">
       {/* Inkomen */}
-      <div className="bg-emerald-50 p-4 rounded-lg space-y-3">
+      <fieldset className="bg-emerald-50 p-4 rounded-lg space-y-3">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold text-emerald-800">Inkomen</h2>
-          {(brutoJaarJij !== config.brutoJaarinkomenJij || brutoJaarPartner !== config.brutoJaarinkomenPartner) && (
-            <button
-              onClick={() => {
-                setBrutoJaarJij(config.brutoJaarinkomenJij);
-                setBrutoJaarPartner(config.brutoJaarinkomenPartner);
-              }}
-              className="text-xs text-emerald-600 hover:text-emerald-800"
-            >
-              Herstel standaardwaarden
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-md border overflow-hidden text-xs">
+              <button
+                onClick={() => setHeeftPartner(false)}
+                aria-pressed={!heeftPartner}
+                className={`px-2 py-1 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 ${!heeftPartner ? 'bg-emerald-600 text-white font-medium' : 'bg-white hover:bg-gray-50'}`}
+              >
+                Alleen
+              </button>
+              <button
+                onClick={() => setHeeftPartner(true)}
+                aria-pressed={heeftPartner}
+                className={`px-2 py-1 transition-colors border-l focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 ${heeftPartner ? 'bg-emerald-600 text-white font-medium' : 'bg-white hover:bg-gray-50'}`}
+              >
+                Samen
+              </button>
+            </div>
+            {(brutoJaarJij !== config.brutoJaarinkomenJij || (heeftPartner && brutoJaarPartner !== config.brutoJaarinkomenPartner)) && (
+              <button
+                onClick={() => {
+                  setBrutoJaarJij(config.brutoJaarinkomenJij);
+                  setBrutoJaarPartner(config.brutoJaarinkomenPartner);
+                }}
+                className="text-xs text-emerald-600 hover:text-emerald-800"
+              >
+                Herstel
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -128,22 +153,24 @@ export default function CarriereKolom({
               />
             </div>
           </div>
-          <div>
-            <label className="block text-gray-600 text-xs mb-1">Partner bruto/jaar</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">€</span>
-              <input
-                type="number"
-                min={0}
-                step={100}
-                value={brutoJaarPartner}
-                onChange={(e) => setBrutoJaarPartner(Number(e.target.value))}
-                className="w-full p-2 pl-7 border rounded text-sm"
-              />
+          {heeftPartner && (
+            <div>
+              <label className="block text-gray-600 text-xs mb-1">Partner bruto/jaar</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">€</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={brutoJaarPartner}
+                  onChange={(e) => setBrutoJaarPartner(Number(e.target.value))}
+                  className="w-full p-2 pl-7 border rounded text-sm"
+                />
+              </div>
             </div>
-          </div>
+          )}
           <p className="text-xs text-gray-500">
-            Toetsinkomen: bruto jaarloon incl. vakantiegeld, 13e maand e.d. Jaarlijks 2% geïndexeerd.
+            Toetsinkomen<Tooltip term="toetsinkomen" />: bruto jaarloon incl. vakantiegeld, 13e maand e.d. Jaarlijks 2% geïndexeerd.
           </p>
         </div>
 
@@ -153,10 +180,12 @@ export default function CarriereKolom({
             <span className="text-gray-600">Jij ({situatie2026.jijUren}u/wk):</span>
             <span>{formatBedrag(situatie2026.jijMaandloon)}/mnd</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Partner ({situatie2026.partnerUren}u/wk):</span>
-            <span>{formatBedrag(situatie2026.partnerMaandloon)}/mnd</span>
-          </div>
+          {heeftPartner && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Partner ({situatie2026.partnerUren}u/wk):</span>
+              <span>{formatBedrag(situatie2026.partnerMaandloon)}/mnd</span>
+            </div>
+          )}
           <div className="flex justify-between font-medium border-t pt-1">
             <span>Totaal bruto/jaar:</span>
             <span>{formatBedrag(situatie2026.totaalBrutoJaar)}</span>
@@ -166,11 +195,11 @@ export default function CarriereKolom({
             <span>{formatBedrag(situatie2026.nettoInkomenMaand)}/mnd</span>
           </div>
         </div>
-      </div>
+      </fieldset>
 
       {/* Carrière & Werk */}
-      <div className="bg-green-50 p-4 rounded-lg space-y-3">
-        <h2 className="font-semibold text-green-800">Carrière & Werk</h2>
+      <fieldset className="bg-green-50 p-4 rounded-lg space-y-3">
+        <legend className="font-semibold text-green-800">Carrière & Werk</legend>
 
         <div>
           <label className="block text-gray-600 text-xs mb-1">Jij: minder gaan werken vanaf</label>
@@ -195,7 +224,7 @@ export default function CarriereKolom({
             </label>
             <input
               type="range"
-              min={16}
+              min={0}
               max={config.jijMaxUren}
               step={1}
               value={jijUrenNaMinderWerken}
@@ -205,37 +234,41 @@ export default function CarriereKolom({
           </div>
         )}
 
-        <div>
-          <label className="block text-gray-600 text-xs mb-1">Partner: minder gaan werken vanaf</label>
-          <select
-            value={partnerMinderWerkenJaar || ''}
-            onChange={(e) => setPartnerMinderWerkenJaar(e.target.value ? Number(e.target.value) : null)}
-            className="w-full p-2 border rounded text-sm"
-          >
-            <option value="">Niet minder gaan werken</option>
-            {jaren.map((j) => (
-              <option key={j} value={j}>
-                {j}
-              </option>
-            ))}
-          </select>
-        </div>
+        {heeftPartner && (
+          <>
+            <div>
+              <label className="block text-gray-600 text-xs mb-1">Partner: minder gaan werken vanaf</label>
+              <select
+                value={partnerMinderWerkenJaar || ''}
+                onChange={(e) => setPartnerMinderWerkenJaar(e.target.value ? Number(e.target.value) : null)}
+                className="w-full p-2 border rounded text-sm"
+              >
+                <option value="">Niet minder gaan werken</option>
+                {jaren.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {partnerMinderWerkenJaar && (
-          <div className="pl-3 border-l-2 border-green-200">
-            <label className="block text-gray-700 mb-1">
-              Partner uren daarna: <span className="font-medium">{partnerUrenNaMinderWerken} uur/week</span>
-            </label>
-            <input
-              type="range"
-              min={16}
-              max={config.partnerMaxUren}
-              step={1}
-              value={partnerUrenNaMinderWerken}
-              onChange={(e) => setPartnerUrenNaMinderWerken(Number(e.target.value))}
-              className="w-full h-2"
-            />
-          </div>
+            {partnerMinderWerkenJaar && (
+              <div className="pl-3 border-l-2 border-green-200">
+                <label className="block text-gray-700 mb-1">
+                  Partner uren daarna: <span className="font-medium">{partnerUrenNaMinderWerken} uur/week</span>
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={config.partnerMaxUren}
+                  step={1}
+                  value={partnerUrenNaMinderWerken}
+                  onChange={(e) => setPartnerUrenNaMinderWerken(Number(e.target.value))}
+                  className="w-full h-2"
+                />
+              </div>
+            )}
+          </>
         )}
 
         <div>
@@ -270,9 +303,10 @@ export default function CarriereKolom({
             />
           </div>
         )}
-      </div>
+      </fieldset>
 
       {/* Scheiding scenario */}
+      {heeftPartner && (
       <div className="bg-orange-50 p-4 rounded-lg space-y-3">
         <h2 className="font-semibold text-orange-800">Scheiding scenario</h2>
 
@@ -358,7 +392,7 @@ export default function CarriereKolom({
                     </div>
                     {s.verkoopKostenDetail.maxBoeterente > 0 && (
                       <div className="flex justify-between text-orange-700">
-                        <span>Boeterente (conservatief)*</span>
+                        <span>Boeterente<Tooltip term="boeterente" /> (conservatief)*</span>
                         <span>-{formatBedrag(s.verkoopKostenDetail.maxBoeterente)}</span>
                       </div>
                     )}
@@ -406,6 +440,7 @@ export default function CarriereKolom({
             );
           })()}
       </div>
+      )}
 
       {/* Vermogen */}
       <div className="bg-gray-50 p-4 rounded-lg space-y-2">
@@ -435,6 +470,6 @@ export default function CarriereKolom({
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
