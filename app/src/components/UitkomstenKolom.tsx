@@ -1,55 +1,33 @@
-import { config } from '../lib/config-loader';
 import type { GemeenteTarieven } from '../gemeente-tarieven';
 import type { JaarSituatie } from '../lib/berekeningen';
-import { OVERDRACHTSBELASTING_PERCENTAGE } from '../constants';
 import { formatBedrag, formatPercentage, getWoonquoteKleur, getWoonquoteTekstKleur } from '../lib/formatters';
 import Tooltip from './Tooltip';
 
-interface KostenKoperDetail {
-  notarisTransport: number;
-  notarisHypotheek: number;
-  kadaster: number;
-  taxatie: number;
-  bankgarantie: number;
-  bouwkundigeKeuring: number;
-  makelaarskosten: number;
-  overdrachtsbelasting: number;
-}
-
-interface ResultatenKolomProps {
+interface UitkomstenKolomProps {
   heeftPartner: boolean;
   woningwaarde: number;
+  startJaar: number;
   bekijkJaar: number;
   gemeenteData: GemeenteTarieven;
   opstalverzekeringMaand: number;
   onderhoudspercentage: number;
 
   // Toggle state
-  toonKostenKoperDetail: boolean;
-  setToonKostenKoperDetail: (b: boolean) => void;
   toonRenteDetail: boolean;
   setToonRenteDetail: (b: boolean) => void;
   toonWoonlastenDetail: boolean;
   setToonWoonlastenDetail: (b: boolean) => void;
 
   // Berekende waarden
-  heeftStartersvrijstelling: boolean;
-  overdrachtsbelasting: number;
-  kostenKoperBasis: number;
-  kostenKoperTotaal: number;
-  kostenKoperDetail: KostenKoperDetail;
-  nhgPremie: number;
-  heeftNHG: boolean;
-  aftrekbareKosten: number;
-  belastingvoordeelKosten: number;
-  kostenKoperNetto: number;
-  eigenInlegHuis: number;
   hypotheekBedrag: number;
   hypotheekMogelijk: boolean;
   inlegWaarschuwingJij: boolean;
   inlegWaarschuwingPartner: boolean;
   bijdrageJij: number;
   bijdragePartner: number;
+  spaargeldJij: number;
+  spaargeldPartner: number;
+  inlegPercentageJij: number;
   rente: number;
   ltv: number;
 
@@ -72,35 +50,27 @@ interface ResultatenKolomProps {
   bufferInMaanden: number;
 }
 
-export default function ResultatenKolom({
+export default function UitkomstenKolom({
   heeftPartner,
   woningwaarde,
+  startJaar,
   bekijkJaar,
   gemeenteData,
   opstalverzekeringMaand,
   onderhoudspercentage,
-  toonKostenKoperDetail,
-  setToonKostenKoperDetail,
   toonRenteDetail,
   setToonRenteDetail,
   toonWoonlastenDetail,
   setToonWoonlastenDetail,
-  heeftStartersvrijstelling,
-  overdrachtsbelasting,
-  kostenKoperBasis,
-  kostenKoperTotaal,
-  kostenKoperDetail,
-  nhgPremie,
-  heeftNHG,
-  belastingvoordeelKosten,
-  kostenKoperNetto,
-  eigenInlegHuis,
   hypotheekBedrag,
   hypotheekMogelijk,
   inlegWaarschuwingJij,
   inlegWaarschuwingPartner,
   bijdrageJij,
   bijdragePartner,
+  spaargeldJij,
+  spaargeldPartner,
+  inlegPercentageJij,
   rente,
   ltv,
   totaleRente30Jaar,
@@ -117,116 +87,59 @@ export default function ResultatenKolom({
   situatie2026,
   situatieBekijkJaar,
   bufferInMaanden,
-}: ResultatenKolomProps) {
+}: UitkomstenKolomProps) {
   return (
-    <section aria-label="Resultaten" className="space-y-4">
-      {/* Kosten & Hypotheek */}
+    <section aria-label="Uitkomsten" className="space-y-4">
+      {/* Blok 4a: Hypotheek samenvatting */}
       <div className="bg-white border-2 border-blue-200 rounded-lg p-4">
-        <h2 className="font-semibold text-gray-800 mb-3">Kosten & Hypotheek</h2>
+        <h2 className="font-semibold text-gray-800 mb-3">Hypotheek</h2>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Kosten koper<Tooltip term="kostenKoper" />:</span>
-            <span>{formatBedrag(kostenKoperBasis)}</span>
-          </div>
-
-          {/* Uitklapbaar: kosten koper detail */}
-          <button
-            onClick={() => setToonKostenKoperDetail(!toonKostenKoperDetail)}
-            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-          >
-            {toonKostenKoperDetail ? '▼' : '▶'} Bekijk uitsplitsing
-          </button>
-          {toonKostenKoperDetail && (
-            <div className="bg-gray-50 rounded p-2 text-xs space-y-1">
-              <p className="font-medium text-gray-600 mb-1">Notaris & kadaster:</p>
-              <div className="flex justify-between pl-2">
-                <span>Transportakte:</span>
-                <span>{formatBedrag(kostenKoperDetail.notarisTransport)}</span>
-              </div>
-              <div className="flex justify-between pl-2">
-                <span>Hypotheekakte:</span>
-                <span>{formatBedrag(kostenKoperDetail.notarisHypotheek)}</span>
-              </div>
-              <div className="flex justify-between pl-2">
-                <span>Kadaster:</span>
-                <span>{formatBedrag(kostenKoperDetail.kadaster)}</span>
-              </div>
-
-              <p className="font-medium text-gray-600 mt-2 mb-1">Advies & keuring:</p>
-              <div className="flex justify-between pl-2">
-                <span>Taxatie:</span>
-                <span>{formatBedrag(kostenKoperDetail.taxatie)}</span>
-              </div>
-              <div className="flex justify-between pl-2">
-                <span>Bankgarantie:</span>
-                <span>{formatBedrag(kostenKoperDetail.bankgarantie)}</span>
-              </div>
-              {kostenKoperDetail.bouwkundigeKeuring > 0 && (
-                <div className="flex justify-between pl-2">
-                  <span>Bouwkundige keuring:</span>
-                  <span>{formatBedrag(kostenKoperDetail.bouwkundigeKeuring)}</span>
-                </div>
-              )}
-              {kostenKoperDetail.makelaarskosten > 0 && (
-                <div className="flex justify-between pl-2">
-                  <span>Aankoopmakelaar:</span>
-                  <span>{formatBedrag(kostenKoperDetail.makelaarskosten)}</span>
-                </div>
-              )}
-
-              {overdrachtsbelasting > 0 && (
-                <>
-                  <p className="font-medium text-gray-600 mt-2 mb-1">Belasting:</p>
-                  <div className="flex justify-between pl-2">
-                    <span>Overdrachtsbelasting<Tooltip term="overdrachtsbelasting" /> (2%):</span>
-                    <span>{formatBedrag(overdrachtsbelasting)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {heeftNHG && (
-            <div className="flex justify-between text-blue-600">
-              <span>NHG-premie<Tooltip term="nhg" /> (0.4%):</span>
-              <span>{formatBedrag(nhgPremie)}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-medium border-t pt-1">
-            <span>Totaal kosten koper:</span>
-            <span>{formatBedrag(kostenKoperTotaal)}</span>
-          </div>
-          <div className="flex justify-between text-green-600 text-xs">
-            <span>- Belastingvoordeel (37%):</span>
-            <span>-{formatBedrag(belastingvoordeelKosten)}</span>
-          </div>
-          <div className="flex justify-between font-medium">
-            <span>Netto kosten koper:</span>
-            <span>{formatBedrag(kostenKoperNetto)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Startersvrijstelling<Tooltip term="startersvrijstelling" />:</span>
-            <span className={heeftStartersvrijstelling ? 'text-green-600' : 'text-red-600'}>
-              {heeftStartersvrijstelling
-                ? `Ja (${formatBedrag(woningwaarde * OVERDRACHTSBELASTING_PERCENTAGE)} bespaard)`
-                : 'Nee'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Eigen inleg in huis:</span>
-            <span>{formatBedrag(eigenInlegHuis)}</span>
-          </div>
-          <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
+          <div className="flex justify-between text-lg font-bold">
             <span>Hypotheekbedrag:</span>
             <span>{formatBedrag(hypotheekBedrag)}</span>
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className="flex justify-between text-xs text-gray-500">
             <span>LTV<Tooltip term="ltv" />: {formatPercentage(ltv, 1)}</span>
           </div>
         </div>
       </div>
 
-      {/* Rente over de Looptijd */}
+      {/* Waarschuwingen */}
+      {!hypotheekMogelijk && (
+        <div role="alert" className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
+          <p className="text-red-800 font-medium">
+            ⚠️ Met deze buffer houd je niet genoeg over voor de kosten koper. Verhoog de buffer of kies een goedkoper
+            huis.
+          </p>
+        </div>
+      )}
+
+      {(inlegWaarschuwingJij || (heeftPartner && inlegWaarschuwingPartner)) && (
+        <div role="alert" className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
+          <p className="text-yellow-800 font-medium">
+            ⚠️ {heeftPartner
+              ? `Het inlegpercentage (${inlegPercentageJij}% / ${100 - inlegPercentageJij}%) past niet bij het beschikbare spaargeld:`
+              : 'Je spaargeld is onvoldoende voor de benodigde inleg:'}
+          </p>
+          <ul className="text-yellow-800 text-sm mt-1 list-disc list-inside">
+            {inlegWaarschuwingJij && (
+              <li>
+                Jij moet {formatBedrag(bijdrageJij)} inleggen, maar hebt {formatBedrag(spaargeldJij)} spaargeld
+                (tekort: {formatBedrag(bijdrageJij - spaargeldJij)})
+              </li>
+            )}
+            {heeftPartner && inlegWaarschuwingPartner && (
+              <li>
+                Partner moet {formatBedrag(bijdragePartner)} inleggen, maar heeft{' '}
+                {formatBedrag(spaargeldPartner)} spaargeld (tekort:{' '}
+                {formatBedrag(bijdragePartner - spaargeldPartner)})
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Blok 4b: Rente over de Looptijd */}
       <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
         <h2 className="font-semibold text-amber-800 mb-3">Rente over de Looptijd</h2>
         <div className="space-y-2 text-sm">
@@ -248,7 +161,7 @@ export default function ResultatenKolom({
             </span>
           </div>
 
-          {/* Vergelijkingstabel */}
+          {/* Vergelijkingstabel ±0.2% */}
           <div className="border-t pt-2 mt-2">
             <p className="text-xs text-gray-500 mb-2">Vergelijking ±0.2% rente:</p>
             <table className="w-full text-xs">
@@ -283,7 +196,7 @@ export default function ResultatenKolom({
             </table>
           </div>
 
-          {/* Uitklapbaar: detail per periode */}
+          {/* Rente per 5-jaars periode */}
           <button
             onClick={() => setToonRenteDetail(!toonRenteDetail)}
             className="text-xs text-amber-600 hover:text-amber-800 mt-2 flex items-center gap-1"
@@ -309,7 +222,7 @@ export default function ResultatenKolom({
         </div>
       </div>
 
-      {/* Woonlasten */}
+      {/* Blok 4c: Woonlasten */}
       <div
         className={`border-2 rounded-lg p-4 ${getWoonquoteKleur(situatieBekijkJaar.woonquoteBruto, situatieBekijkJaar.nibudNorm)}`}
       >
@@ -332,7 +245,8 @@ export default function ResultatenKolom({
             <span>Hypotheek netto:</span>
             <span>{formatBedrag(situatieBekijkJaar.nettoMaandlast)}/mnd</span>
           </div>
-          {/* Uitklapbaar: Bijkomende lasten */}
+
+          {/* Bijkomende lasten */}
           <button
             onClick={() => setToonWoonlastenDetail(!toonWoonlastenDetail)}
             className="text-xs text-cyan-600 hover:text-cyan-800 mt-2 flex items-center gap-1"
@@ -411,40 +325,34 @@ export default function ResultatenKolom({
         </p>
       </div>
 
-      {/* Waarschuwing */}
-      {!hypotheekMogelijk && (
-        <div role="alert" className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
-          <p className="text-red-800 font-medium">
-            ⚠️ Met deze buffer houd je niet genoeg over voor de kosten koper. Verhoog de buffer of kies een goedkoper
-            huis.
-          </p>
+      {/* Blok 4d: Vermogen */}
+      <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+        <h2 className="font-semibold text-gray-800">Vermogen {bekijkJaar}</h2>
+        <div className="text-sm space-y-1">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Woningwaarde:</span>
+            <span>{formatBedrag(situatieBekijkJaar.woningwaardeNu)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Restschuld:</span>
+            <span>-{formatBedrag(situatieBekijkJaar.restschuld)}</span>
+          </div>
+          <div className="flex justify-between font-bold text-green-700 border-t pt-1">
+            <span>Eigen vermogen:</span>
+            <span className="text-lg">{formatBedrag(situatieBekijkJaar.eigenVermogen)}</span>
+          </div>
         </div>
-      )}
-
-      {(inlegWaarschuwingJij || (heeftPartner && inlegWaarschuwingPartner)) && (
-        <div role="alert" className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
-          <p className="text-yellow-800 font-medium">
-            ⚠️ {heeftPartner
-              ? `Het inlegpercentage (${config.inlegPercentageJij}% / ${100 - config.inlegPercentageJij}%) past niet bij het beschikbare spaargeld:`
-              : 'Je spaargeld is onvoldoende voor de benodigde inleg:'}
-          </p>
-          <ul className="text-yellow-800 text-sm mt-1 list-disc list-inside">
-            {inlegWaarschuwingJij && (
-              <li>
-                Jij moet {formatBedrag(bijdrageJij)} inleggen, maar heeft {formatBedrag(config.spaargeldJij)} spaargeld
-                (tekort: {formatBedrag(bijdrageJij - config.spaargeldJij)})
-              </li>
-            )}
-            {heeftPartner && inlegWaarschuwingPartner && (
-              <li>
-                Partner moet {formatBedrag(bijdragePartner)} inleggen, maar heeft{' '}
-                {formatBedrag(config.spaargeldPartner)} spaargeld (tekort:{' '}
-                {formatBedrag(bijdragePartner - config.spaargeldPartner)})
-              </li>
-            )}
-          </ul>
+        <div className="bg-white rounded p-2 text-xs space-y-1 mt-2">
+          <div className="flex justify-between text-gray-500">
+            <span>Afgelost sinds {startJaar}:</span>
+            <span>{formatBedrag(situatieBekijkJaar.totaalAfgelost)}</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>Waardestijging (3%/jaar):</span>
+            <span>+{formatBedrag(situatieBekijkJaar.woningwaardeNu - woningwaarde)}</span>
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }

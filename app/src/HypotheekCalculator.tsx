@@ -34,9 +34,10 @@ import { isTariefVerouderd, dagenOud } from './lib/staleness';
 import { NIBUD_NORMEN_JAAR } from './lib/nibud-normen';
 import { berekenTotaleRente, berekenJaarSituatiePure } from './lib/berekeningen';
 import type { JaarContext } from './lib/berekeningen';
-import InvoerKolom from './components/InvoerKolom';
-import CarriereKolom from './components/CarriereKolom';
-import ResultatenKolom from './components/ResultatenKolom';
+import PersoonlijkKolom from './components/PersoonlijkKolom';
+import WoningKolom from './components/WoningKolom';
+import HypotheekKolom from './components/HypotheekKolom';
+import UitkomstenKolom from './components/UitkomstenKolom';
 import JaarlijkseTabel from './components/JaarlijkseTabel';
 
 export default function HypotheekCalculator() {
@@ -45,6 +46,11 @@ export default function HypotheekCalculator() {
   if (isDefaultConfig && !gebruikStandaard) {
     return <ConfigOnboarding onGebruikStandaard={() => setGebruikStandaard(true)} />;
   }
+
+  // === VERMOGEN ===
+  const [spaargeldJij, setSpaargeldJij] = useState(config.spaargeldJij);
+  const [spaargeldPartner, setSpaargeldPartner] = useState(config.spaargeldPartner);
+  const [inlegPercentageJij, setInlegPercentageJij] = useState(config.inlegPercentageJij);
 
   // === WONING & HYPOTHEEK ===
   const [woningwaarde, setWoningwaarde] = useState(config.woningwaarde);
@@ -95,8 +101,8 @@ export default function HypotheekCalculator() {
 
   // === AFGELEIDE WAARDEN ===
   const startJaar = config.startJaar;
-  const totaalSpaargeld = config.spaargeldJij + (heeftPartner ? config.spaargeldPartner : 0);
-  const jijInlegRatio = heeftPartner ? config.inlegPercentageJij / 100 : 1;
+  const totaalSpaargeld = spaargeldJij + (heeftPartner ? spaargeldPartner : 0);
+  const jijInlegRatio = heeftPartner ? inlegPercentageJij / 100 : 1;
   const partnerInlegRatio = 1 - jijInlegRatio;
   const effectiefBrutoJaarPartner = heeftPartner ? brutoJaarPartner : 0;
   const gemeenteData = gemeenteTarieven[gemeente];
@@ -180,8 +186,8 @@ export default function HypotheekCalculator() {
 
     const bijdrageJij = beschikbaarVoorInleg * jijInlegRatio;
     const bijdragePartner = beschikbaarVoorInleg * partnerInlegRatio;
-    const inlegWaarschuwingJij = bijdrageJij > config.spaargeldJij;
-    const inlegWaarschuwingPartner = bijdragePartner > config.spaargeldPartner;
+    const inlegWaarschuwingJij = bijdrageJij > spaargeldJij;
+    const inlegWaarschuwingPartner = bijdragePartner > spaargeldPartner;
 
     const HRA_TARIEF = HRA_MAX_TARIEF;
     const aftrekbareKosten =
@@ -298,6 +304,7 @@ export default function HypotheekCalculator() {
       belastingvoordeelKosten,
       kostenKoperNetto,
       nhgPremie,
+      beschikbaarVoorInleg,
       eigenInlegHuis,
       hypotheekBedrag,
       hypotheekMogelijk,
@@ -347,7 +354,7 @@ export default function HypotheekCalculator() {
 
   // === RENDER ===
   return (
-    <main className="p-2 sm:p-4 max-w-7xl mx-auto space-y-4 text-sm">
+    <main className="p-2 sm:p-4 max-w-[1600px] mx-auto space-y-4 text-sm">
       {/* Header */}
       <header className="border-b pb-3">
         <h1 className="text-xl font-bold text-gray-800">Hypotheek Scenario Calculator</h1>
@@ -369,50 +376,23 @@ export default function HypotheekCalculator() {
         )}
       </header>
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {/* Kolom 1: Invoer */}
-        <InvoerKolom
-          woningwaarde={woningwaarde}
-          setWoningwaarde={setWoningwaarde}
-          buffer={buffer}
-          setBuffer={setBuffer}
-          hypotheekProduct={hypotheekProduct}
-          setHypotheekProduct={setHypotheekProduct}
-          hypotheekType={hypotheekType}
-          setHypotheekType={setHypotheekType}
-          energielabel={energielabel}
-          setEnergielabel={setEnergielabel}
-          rentevastePeriode={rentevastePeriode}
-          setRentevastePeriode={setRentevastePeriode}
-          provider={provider}
-          heeftBouwkundigeKeuring={heeftBouwkundigeKeuring}
-          setHeeftBouwkundigeKeuring={setHeeftBouwkundigeKeuring}
-          heeftAankoopmakelaar={heeftAankoopmakelaar}
-          setHeeftAankoopmakelaar={setHeeftAankoopmakelaar}
-          makelaarsKosten={makelaarsKosten}
-          setMakelaarsKosten={setMakelaarsKosten}
-          gemeente={gemeente}
-          setGemeente={setGemeente}
-          gemeenteData={gemeenteData}
-          opstalverzekeringMaand={opstalverzekeringMaand}
-          setOpstalverzekeringMaand={setOpstalverzekeringMaand}
-          onderhoudspercentage={onderhoudspercentage}
-          setOnderhoudspercentage={setOnderhoudspercentage}
-          toonGemeenteTarieven={toonGemeenteTarieven}
-          setToonGemeenteTarieven={setToonGemeenteTarieven}
-          rente={berekening.rente}
-          heeftNHG={berekening.heeftNHG}
-          ltv={berekening.ltv}
-        />
-
-        {/* Kolom 2: Carrière & Scenario's */}
-        <CarriereKolom
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        {/* Kolom 1: Persoonlijk */}
+        <PersoonlijkKolom
           heeftPartner={heeftPartner}
           setHeeftPartner={setHeeftPartner}
           brutoJaarJij={brutoJaarJij}
           setBrutoJaarJij={setBrutoJaarJij}
           brutoJaarPartner={brutoJaarPartner}
           setBrutoJaarPartner={setBrutoJaarPartner}
+          spaargeldJij={spaargeldJij}
+          setSpaargeldJij={setSpaargeldJij}
+          spaargeldPartner={spaargeldPartner}
+          setSpaargeldPartner={setSpaargeldPartner}
+          inlegPercentageJij={inlegPercentageJij}
+          setInlegPercentageJij={setInlegPercentageJij}
+          buffer={buffer}
+          setBuffer={setBuffer}
           jijMinderWerkenJaar={jijMinderWerkenJaar}
           setJijMinderWerkenJaar={setJijMinderWerkenJaar}
           partnerMinderWerkenJaar={partnerMinderWerkenJaar}
@@ -428,45 +408,88 @@ export default function HypotheekCalculator() {
           jarenTotScheiding={jarenTotScheiding}
           setJarenTotScheiding={setJarenTotScheiding}
           scheidingResultaat={berekening.scheidingResultaat}
-          bekijkJaar={bekijkJaar}
-          woningwaarde={woningwaarde}
           startJaar={startJaar}
           jaren={jaren}
+          totaalSpaargeld={totaalSpaargeld}
+          beschikbaarVoorInleg={berekening.beschikbaarVoorInleg}
           situatie2026={berekening.situatie2026}
-          situatieBekijkJaar={berekening.situatieBekijkJaar}
         />
 
-        {/* Kolom 3: Resultaten */}
-        <ResultatenKolom
+        {/* Kolom 2: Woning */}
+        <WoningKolom
+          woningwaarde={woningwaarde}
+          setWoningwaarde={setWoningwaarde}
+          energielabel={energielabel}
+          setEnergielabel={setEnergielabel}
+          gemeente={gemeente}
+          setGemeente={setGemeente}
+          gemeenteData={gemeenteData}
+          heeftBouwkundigeKeuring={heeftBouwkundigeKeuring}
+          setHeeftBouwkundigeKeuring={setHeeftBouwkundigeKeuring}
+          heeftAankoopmakelaar={heeftAankoopmakelaar}
+          setHeeftAankoopmakelaar={setHeeftAankoopmakelaar}
+          makelaarsKosten={makelaarsKosten}
+          setMakelaarsKosten={setMakelaarsKosten}
+          opstalverzekeringMaand={opstalverzekeringMaand}
+          setOpstalverzekeringMaand={setOpstalverzekeringMaand}
+          onderhoudspercentage={onderhoudspercentage}
+          setOnderhoudspercentage={setOnderhoudspercentage}
+          toonGemeenteTarieven={toonGemeenteTarieven}
+          setToonGemeenteTarieven={setToonGemeenteTarieven}
+          toonKostenKoperDetail={toonKostenKoperDetail}
+          setToonKostenKoperDetail={setToonKostenKoperDetail}
+          heeftStartersvrijstelling={berekening.heeftStartersvrijstelling}
+          heeftNHG={berekening.heeftNHG}
+          nhgMetVerduurzaming={berekening.nhgMetVerduurzaming}
+          overdrachtsbelasting={berekening.overdrachtsbelasting}
+          kostenKoperDetail={berekening.kostenKoperDetail}
+          kostenKoperBasis={berekening.kostenKoperBasis}
+          kostenKoperTotaal={berekening.kostenKoperTotaal}
+          nhgPremie={berekening.nhgPremie}
+          belastingvoordeelKosten={berekening.belastingvoordeelKosten}
+          kostenKoperNetto={berekening.kostenKoperNetto}
+          eigenInlegHuis={berekening.eigenInlegHuis}
+          hypotheekBedrag={berekening.hypotheekBedrag}
+          ltv={berekening.ltv}
+        />
+
+        {/* Kolom 3: Hypotheek */}
+        <HypotheekKolom
+          hypotheekType={hypotheekType}
+          setHypotheekType={setHypotheekType}
+          rentevastePeriode={rentevastePeriode}
+          setRentevastePeriode={setRentevastePeriode}
+          hypotheekProduct={hypotheekProduct}
+          setHypotheekProduct={setHypotheekProduct}
+          ltv={berekening.ltv}
+          heeftNHG={berekening.heeftNHG}
+          energielabel={energielabel}
+          rente={berekening.rente}
+          provider={provider}
+        />
+
+        {/* Kolom 4: Uitkomsten */}
+        <UitkomstenKolom
           heeftPartner={heeftPartner}
           woningwaarde={woningwaarde}
+          startJaar={startJaar}
           bekijkJaar={bekijkJaar}
           gemeenteData={gemeenteData}
           opstalverzekeringMaand={opstalverzekeringMaand}
           onderhoudspercentage={onderhoudspercentage}
-          toonKostenKoperDetail={toonKostenKoperDetail}
-          setToonKostenKoperDetail={setToonKostenKoperDetail}
           toonRenteDetail={toonRenteDetail}
           setToonRenteDetail={setToonRenteDetail}
           toonWoonlastenDetail={toonWoonlastenDetail}
           setToonWoonlastenDetail={setToonWoonlastenDetail}
-          heeftStartersvrijstelling={berekening.heeftStartersvrijstelling}
-          overdrachtsbelasting={berekening.overdrachtsbelasting}
-          kostenKoperBasis={berekening.kostenKoperBasis}
-          kostenKoperTotaal={berekening.kostenKoperTotaal}
-          kostenKoperDetail={berekening.kostenKoperDetail}
-          nhgPremie={berekening.nhgPremie}
-          heeftNHG={berekening.heeftNHG}
-          aftrekbareKosten={berekening.aftrekbareKosten}
-          belastingvoordeelKosten={berekening.belastingvoordeelKosten}
-          kostenKoperNetto={berekening.kostenKoperNetto}
-          eigenInlegHuis={berekening.eigenInlegHuis}
           hypotheekBedrag={berekening.hypotheekBedrag}
           hypotheekMogelijk={berekening.hypotheekMogelijk}
           inlegWaarschuwingJij={berekening.inlegWaarschuwingJij}
           inlegWaarschuwingPartner={berekening.inlegWaarschuwingPartner}
           bijdrageJij={berekening.bijdrageJij}
           bijdragePartner={berekening.bijdragePartner}
+          spaargeldJij={spaargeldJij}
+          spaargeldPartner={spaargeldPartner}
+          inlegPercentageJij={inlegPercentageJij}
           rente={berekening.rente}
           ltv={berekening.ltv}
           totaleRente30Jaar={berekening.totaleRente30Jaar}

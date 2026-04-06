@@ -63,12 +63,13 @@ describe('HypotheekCalculator (integratie)', () => {
     expect(screen.getByText('Hypotheek Scenario Calculator')).toBeInTheDocument();
   });
 
-  it('toont de drie kolommen', () => {
+  it('toont de vier kolommen', () => {
     render(<HypotheekCalculator />);
 
-    expect(screen.getByLabelText('Invoer')).toBeInTheDocument();
-    expect(screen.getByLabelText('Carrière & Scenario\'s')).toBeInTheDocument();
-    expect(screen.getByLabelText('Resultaten')).toBeInTheDocument();
+    expect(screen.getByLabelText('Persoonlijk')).toBeInTheDocument();
+    expect(screen.getByLabelText('Woning')).toBeInTheDocument();
+    expect(screen.getByLabelText('Hypotheek')).toBeInTheDocument();
+    expect(screen.getByLabelText('Uitkomsten')).toBeInTheDocument();
   });
 
   it('toont de jaarlijkse tabel', () => {
@@ -88,8 +89,9 @@ describe('HypotheekCalculator (integratie)', () => {
   it('toont het hypotheekbedrag (woningwaarde - eigen inleg)', () => {
     render(<HypotheekCalculator />);
 
-    // Er moet een hypotheekbedrag getoond worden
-    expect(screen.getByText('Hypotheekbedrag:')).toBeInTheDocument();
+    // Hypotheekbedrag wordt getoond in zowel Woning als Uitkomsten kolom
+    const hypotheekBedragElements = screen.getAllByText('Hypotheekbedrag:');
+    expect(hypotheekBedragElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it('toont woonlasten sectie met het startjaar', () => {
@@ -101,7 +103,7 @@ describe('HypotheekCalculator (integratie)', () => {
   it('toont inkomenssectie', () => {
     render(<HypotheekCalculator />);
 
-    expect(screen.getByText('Inkomen')).toBeInTheDocument();
+    expect(screen.getByText('Inkomen & Vermogen')).toBeInTheDocument();
   });
 
   it('wisselt hypotheektype van annuitair naar lineair', async () => {
