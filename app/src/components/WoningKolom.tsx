@@ -2,10 +2,7 @@ import { gemeenteTarieven } from '../gemeente-tarieven';
 import type { GemeenteTarieven } from '../gemeente-tarieven';
 import {
   BOUWKUNDIGE_KEURING,
-  NHG_GRENS,
-  NHG_GRENS_VERDUURZAMING,
   OVERDRACHTSBELASTING_PERCENTAGE,
-  STARTERSVRIJSTELLING_GRENS,
 } from '../constants';
 import { formatBedrag, formatPercentage } from '../lib/formatters';
 import Tooltip from './Tooltip';
