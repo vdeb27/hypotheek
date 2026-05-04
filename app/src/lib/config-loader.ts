@@ -1,14 +1,14 @@
 import type { GebruikersConfig } from '../types';
 
 const DEFAULT_CONFIG: GebruikersConfig = {
-  woningwaarde: 400000,
+  woningwaarde: 450000,
   buffer: 20000,
-  spaargeldJij: 60000,
-  spaargeldPartner: 40000,
+  spaargeldJij: 35000,
+  spaargeldPartner: 25000,
   inlegPercentageJij: 50,
 
-  brutoJaarinkomenJij: 60000,
-  brutoJaarinkomenPartner: 50000,
+  brutoJaarinkomenJij: 54000,
+  brutoJaarinkomenPartner: 46500,
 
   jijMaxUren: 40,
   partnerMaxUren: 40,

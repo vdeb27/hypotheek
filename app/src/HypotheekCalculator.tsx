@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { providers, laatstBijgewerkt } from './providers';
 import { config, isDefaultConfig } from './lib/config-loader';
 import ConfigOnboarding from './components/ConfigOnboarding';
+import { laadOpgeslagenState, slaStateOp } from './lib/calculator-storage';
 import { HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven } from './gemeente-tarieven';
 import {
@@ -42,44 +43,48 @@ import JaarlijkseTabel from './components/JaarlijkseTabel';
 
 export default function HypotheekCalculator() {
   const [gebruikStandaard, setGebruikStandaard] = useState(false);
+  const [opgeslagen] = useState(() => laadOpgeslagenState());
 
-  if (isDefaultConfig && !gebruikStandaard) {
+  if (isDefaultConfig && !gebruikStandaard && !opgeslagen) {
     return <ConfigOnboarding onGebruikStandaard={() => setGebruikStandaard(true)} />;
   }
 
+  const s = opgeslagen;
+
   // === VERMOGEN ===
-  const [spaargeldJij, setSpaargeldJij] = useState(config.spaargeldJij);
-  const [spaargeldPartner, setSpaargeldPartner] = useState(config.spaargeldPartner);
-  const [inlegPercentageJij, setInlegPercentageJij] = useState(config.inlegPercentageJij);
+  const [spaargeldJij, setSpaargeldJij] = useState(s?.spaargeldJij ?? config.spaargeldJij);
+  const [spaargeldPartner, setSpaargeldPartner] = useState(s?.spaargeldPartner ?? config.spaargeldPartner);
+  const [inlegPercentageJij, setInlegPercentageJij] = useState(s?.inlegPercentageJij ?? config.inlegPercentageJij);
 
   // === WONING & HYPOTHEEK ===
-  const [woningwaarde, setWoningwaarde] = useState(config.woningwaarde);
-  const [buffer, setBuffer] = useState(config.buffer);
-  const [hypotheekType, setHypotheekType] = useState('annuitair');
+  const [woningwaarde, setWoningwaarde] = useState(s?.woningwaarde ?? config.woningwaarde);
+  const [buffer, setBuffer] = useState(s?.buffer ?? config.buffer);
+  const [hypotheekType, setHypotheekType] = useState(s?.hypotheekType ?? 'annuitair');
   const [hypotheekProduct, setHypotheekProduct] = useState(() => {
+    if (s?.hypotheekProduct) return s.hypotheekProduct;
     const asnBespaar = Object.values(providers).find((p) => p.bank === 'ASN Bank' && p.naam.includes('Bespaar'));
     return asnBespaar?.id ?? Object.keys(providers)[0] ?? 'bespaar';
   });
-  const [energielabel, setEnergielabel] = useState(config.energielabel);
-  const [rentevastePeriode, setRentevastePeriode] = useState(10);
+  const [energielabel, setEnergielabel] = useState(s?.energielabel ?? config.energielabel);
+  const [rentevastePeriode, setRentevastePeriode] = useState(s?.rentevastePeriode ?? 10);
 
   // === CARRIÈRE & WERK ===
-  const [jijMinderWerkenJaar, setJijMinderWerkenJaar] = useState<number | null>(null);
-  const [partnerMinderWerkenJaar, setPartnerMinderWerkenJaar] = useState<number | null>(null);
-  const [jijUrenNaMinderWerken, setJijUrenNaMinderWerken] = useState(config.jijUrenNaMinderWerken);
-  const [partnerUrenNaMinderWerken, setPartnerUrenNaMinderWerken] = useState(config.partnerUrenNaMinderWerken);
-  const [promotieJaar, setPromotieJaar] = useState<number | null>(null);
-  const [promotieOpslag, setPromotieOpslag] = useState(config.promotieOpslagPercentage);
+  const [jijMinderWerkenJaar, setJijMinderWerkenJaar] = useState<number | null>(s?.jijMinderWerkenJaar ?? null);
+  const [partnerMinderWerkenJaar, setPartnerMinderWerkenJaar] = useState<number | null>(s?.partnerMinderWerkenJaar ?? null);
+  const [jijUrenNaMinderWerken, setJijUrenNaMinderWerken] = useState(s?.jijUrenNaMinderWerken ?? config.jijUrenNaMinderWerken);
+  const [partnerUrenNaMinderWerken, setPartnerUrenNaMinderWerken] = useState(s?.partnerUrenNaMinderWerken ?? config.partnerUrenNaMinderWerken);
+  const [promotieJaar, setPromotieJaar] = useState<number | null>(s?.promotieJaar ?? null);
+  const [promotieOpslag, setPromotieOpslag] = useState(s?.promotieOpslag ?? config.promotieOpslagPercentage);
 
   // === HUISHOUDEN ===
-  const [heeftPartner, setHeeftPartner] = useState(config.heeftPartner ?? config.brutoJaarinkomenPartner > 0);
+  const [heeftPartner, setHeeftPartner] = useState(s?.heeftPartner ?? (config.heeftPartner ?? config.brutoJaarinkomenPartner > 0));
 
   // === INKOMEN ===
-  const [brutoJaarJij, setBrutoJaarJij] = useState(config.brutoJaarinkomenJij);
-  const [brutoJaarPartner, setBrutoJaarPartner] = useState(config.brutoJaarinkomenPartner);
+  const [brutoJaarJij, setBrutoJaarJij] = useState(s?.brutoJaarJij ?? config.brutoJaarinkomenJij);
+  const [brutoJaarPartner, setBrutoJaarPartner] = useState(s?.brutoJaarPartner ?? config.brutoJaarinkomenPartner);
 
   // === SCENARIO'S ===
-  const [jarenTotScheiding, setJarenTotScheiding] = useState(0);
+  const [jarenTotScheiding, setJarenTotScheiding] = useState(s?.jarenTotScheiding ?? 0);
   const [bekijkJaar, setBekijkJaar] = useState(config.startJaar);
 
   // === UI STATE ===
@@ -87,17 +92,17 @@ export default function HypotheekCalculator() {
   const [toonKostenKoperDetail, setToonKostenKoperDetail] = useState(false);
   const [toonWoonlastenDetail, setToonWoonlastenDetail] = useState(false);
   const [toonGemeenteTarieven, setToonGemeenteTarieven] = useState(false);
-  const [aantalZichtbareJaren, setAantalZichtbareJaren] = useState(10);
+  const [aantalZichtbareJaren, setAantalZichtbareJaren] = useState(s?.aantalZichtbareJaren ?? 10);
 
   // === KOSTEN KOPER OPTIES ===
-  const [heeftBouwkundigeKeuring, setHeeftBouwkundigeKeuring] = useState(true);
-  const [heeftAankoopmakelaar, setHeeftAankoopmakelaar] = useState(false);
-  const [makelaarsKosten, setMakelaarsKosten] = useState(config.makelaarsKosten);
+  const [heeftBouwkundigeKeuring, setHeeftBouwkundigeKeuring] = useState(s?.heeftBouwkundigeKeuring ?? true);
+  const [heeftAankoopmakelaar, setHeeftAankoopmakelaar] = useState(s?.heeftAankoopmakelaar ?? false);
+  const [makelaarsKosten, setMakelaarsKosten] = useState(s?.makelaarsKosten ?? config.makelaarsKosten);
 
   // === WOONLASTEN OPTIES ===
-  const [gemeente, setGemeente] = useState<string>(config.gemeente);
-  const [opstalverzekeringMaand, setOpstalverzekeringMaand] = useState(config.opstalverzekeringMaand);
-  const [onderhoudspercentage, setOnderhoudspercentage] = useState(0.75);
+  const [gemeente, setGemeente] = useState<string>(s?.gemeente ?? config.gemeente);
+  const [opstalverzekeringMaand, setOpstalverzekeringMaand] = useState(s?.opstalverzekeringMaand ?? config.opstalverzekeringMaand);
+  const [onderhoudspercentage, setOnderhoudspercentage] = useState(s?.onderhoudspercentage ?? 0.75);
 
   // === AFGELEIDE WAARDEN ===
   const startJaar = config.startJaar;
@@ -350,6 +355,33 @@ export default function HypotheekCalculator() {
     jijInlegRatio,
     partnerInlegRatio,
     jaarCtx,
+  ]);
+
+  // === LOKALE OPSLAG ===
+  useEffect(() => {
+    slaStateOp({
+      spaargeldJij, spaargeldPartner, inlegPercentageJij,
+      woningwaarde, buffer, hypotheekType, hypotheekProduct,
+      energielabel, rentevastePeriode,
+      heeftPartner, brutoJaarJij, brutoJaarPartner,
+      jijUrenNaMinderWerken, partnerUrenNaMinderWerken, promotieOpslag,
+      jijMinderWerkenJaar, partnerMinderWerkenJaar, promotieJaar,
+      jarenTotScheiding,
+      heeftBouwkundigeKeuring, heeftAankoopmakelaar, makelaarsKosten,
+      gemeente, opstalverzekeringMaand, onderhoudspercentage,
+      aantalZichtbareJaren,
+    });
+  }, [
+    spaargeldJij, spaargeldPartner, inlegPercentageJij,
+    woningwaarde, buffer, hypotheekType, hypotheekProduct,
+    energielabel, rentevastePeriode,
+    heeftPartner, brutoJaarJij, brutoJaarPartner,
+    jijUrenNaMinderWerken, partnerUrenNaMinderWerken, promotieOpslag,
+    jijMinderWerkenJaar, partnerMinderWerkenJaar, promotieJaar,
+    jarenTotScheiding,
+    heeftBouwkundigeKeuring, heeftAankoopmakelaar, makelaarsKosten,
+    gemeente, opstalverzekeringMaand, onderhoudspercentage,
+    aantalZichtbareJaren,
   ]);
 
   // === RENDER ===
