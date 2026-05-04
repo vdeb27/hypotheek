@@ -1,14 +1,14 @@
 # Bijdragen aan Hypotheek Calculator
 
-## Eigen gebruik (fork)
+## Gebruik
 
-1. Fork het project
-2. `cd app && npm install`
-3. `cp src/user-config.example.json src/user-config.json`
-4. Pas `src/user-config.json` aan met je eigen gegevens
-5. `npm run dev`
+De calculator is direct te gebruiken via **[vdeb27.github.io/hypotheek-calculator](https://vdeb27.github.io/hypotheek-calculator/)**. Geen installatie nodig — je gegevens worden alleen lokaal in je browser opgeslagen.
 
-Je configuratiebestand staat in `.gitignore` en wordt nooit meegenomen in commits.
+Om lokaal te ontwikkelen:
+
+```bash
+cd app && npm install && npm run dev
+```
 
 ## Gemeente toevoegen
 
@@ -41,13 +41,15 @@ Gemeentelijke tarieven staan in `app/src/gemeente-tarieven.ts`. Om een gemeente 
 ### Dataflow
 
 ```
-user-config.json → HypotheekCalculator (state + berekeningen)
-                          ↓
-              ┌───────────┼───────────┐
-              ↓           ↓           ↓
-         InvoerKolom  CarriereKolom  ResultatenKolom
-                                          ↓
-                                   JaarlijkseTabel
+localStorage / standaardwaarden → HypotheekCalculator (state + berekeningen)
+                                           ↓
+                           ┌───────────────┼───────────────┐
+                           ↓               ↓               ↓
+                    PersoonlijkKolom  WoningKolom  HypotheekKolom
+                                                        ↓
+                                               UitkomstenKolom
+                                                        ↓
+                                               JaarlijkseTabel
 ```
 
 ### Berekeningen

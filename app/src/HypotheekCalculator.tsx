@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { providers, laatstBijgewerkt } from './providers';
 import { config, isDefaultConfig } from './lib/config-loader';
-import ConfigOnboarding from './components/ConfigOnboarding';
+import ConfigOnboarding, { type InstellingenWaarden } from './components/ConfigOnboarding';
 import { laadOpgeslagenState, slaStateOp } from './lib/calculator-storage';
 import { HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven } from './gemeente-tarieven';
@@ -43,10 +43,37 @@ import JaarlijkseTabel from './components/JaarlijkseTabel';
 
 export default function HypotheekCalculator() {
   const [gebruikStandaard, setGebruikStandaard] = useState(false);
+  const [toonInstellingen, setToonInstellingen] = useState(false);
   const [opgeslagen] = useState(() => laadOpgeslagenState());
 
-  if (isDefaultConfig && !gebruikStandaard && !opgeslagen) {
-    return <ConfigOnboarding onGebruikStandaard={() => setGebruikStandaard(true)} />;
+  // Deze 4 waarden zijn instelbaar via de landingspagina én via de instellingen-knop.
+  // Ze staan vóór de conditional zodat handleBegin ze direct kan updaten.
+  const [heeftPartner, setHeeftPartner] = useState(
+    opgeslagen?.heeftPartner ?? (config.heeftPartner ?? config.brutoJaarinkomenPartner > 0)
+  );
+  const [startJaar, setStartJaar] = useState(opgeslagen?.startJaar ?? config.startJaar);
+  const [jijMaxUren, setJijMaxUren] = useState(opgeslagen?.jijMaxUren ?? config.jijMaxUren);
+  const [partnerMaxUren, setPartnerMaxUren] = useState(opgeslagen?.partnerMaxUren ?? config.partnerMaxUren);
+
+  const toonLandingspagina = (isDefaultConfig && !gebruikStandaard && !opgeslagen) || toonInstellingen;
+
+  function handleBegin(waarden: InstellingenWaarden) {
+    setHeeftPartner(waarden.heeftPartner);
+    setStartJaar(waarden.startJaar);
+    setJijMaxUren(waarden.jijMaxUren);
+    setPartnerMaxUren(waarden.partnerMaxUren);
+    setGebruikStandaard(true);
+    setToonInstellingen(false);
+  }
+
+  if (toonLandingspagina) {
+    return (
+      <ConfigOnboarding
+        huidigeWaarden={{ heeftPartner, startJaar, jijMaxUren, partnerMaxUren }}
+        onBegin={handleBegin}
+        onSlaOver={() => { setGebruikStandaard(true); setToonInstellingen(false); }}
+      />
+    );
   }
 
   const s = opgeslagen;
@@ -76,16 +103,13 @@ export default function HypotheekCalculator() {
   const [promotieJaar, setPromotieJaar] = useState<number | null>(s?.promotieJaar ?? null);
   const [promotieOpslag, setPromotieOpslag] = useState(s?.promotieOpslag ?? config.promotieOpslagPercentage);
 
-  // === HUISHOUDEN ===
-  const [heeftPartner, setHeeftPartner] = useState(s?.heeftPartner ?? (config.heeftPartner ?? config.brutoJaarinkomenPartner > 0));
-
   // === INKOMEN ===
   const [brutoJaarJij, setBrutoJaarJij] = useState(s?.brutoJaarJij ?? config.brutoJaarinkomenJij);
   const [brutoJaarPartner, setBrutoJaarPartner] = useState(s?.brutoJaarPartner ?? config.brutoJaarinkomenPartner);
 
   // === SCENARIO'S ===
   const [jarenTotScheiding, setJarenTotScheiding] = useState(s?.jarenTotScheiding ?? 0);
-  const [bekijkJaar, setBekijkJaar] = useState(config.startJaar);
+  const [bekijkJaar, setBekijkJaar] = useState(s?.startJaar ?? config.startJaar);
 
   // === UI STATE ===
   const [toonRenteDetail, setToonRenteDetail] = useState(false);
@@ -105,7 +129,6 @@ export default function HypotheekCalculator() {
   const [onderhoudspercentage, setOnderhoudspercentage] = useState(s?.onderhoudspercentage ?? 0.75);
 
   // === AFGELEIDE WAARDEN ===
-  const startJaar = config.startJaar;
   const totaalSpaargeld = spaargeldJij + (heeftPartner ? spaargeldPartner : 0);
   const jijInlegRatio = heeftPartner ? inlegPercentageJij / 100 : 1;
   const partnerInlegRatio = 1 - jijInlegRatio;
@@ -126,8 +149,8 @@ export default function HypotheekCalculator() {
       partnerMinderWerkenJaar,
       jijUrenNaMinderWerken,
       partnerUrenNaMinderWerken,
-      jijMaxUren: config.jijMaxUren,
-      partnerMaxUren: config.partnerMaxUren,
+      jijMaxUren,
+      partnerMaxUren,
       woningwaarde,
       hypotheekType,
       gemeenteData,
@@ -144,6 +167,8 @@ export default function HypotheekCalculator() {
       partnerMinderWerkenJaar,
       jijUrenNaMinderWerken,
       partnerUrenNaMinderWerken,
+      jijMaxUren,
+      partnerMaxUren,
       woningwaarde,
       hypotheekType,
       gemeenteData,
@@ -360,10 +385,11 @@ export default function HypotheekCalculator() {
   // === LOKALE OPSLAG ===
   useEffect(() => {
     slaStateOp({
+      heeftPartner, startJaar, jijMaxUren, partnerMaxUren,
       spaargeldJij, spaargeldPartner, inlegPercentageJij,
       woningwaarde, buffer, hypotheekType, hypotheekProduct,
       energielabel, rentevastePeriode,
-      heeftPartner, brutoJaarJij, brutoJaarPartner,
+      brutoJaarJij, brutoJaarPartner,
       jijUrenNaMinderWerken, partnerUrenNaMinderWerken, promotieOpslag,
       jijMinderWerkenJaar, partnerMinderWerkenJaar, promotieJaar,
       jarenTotScheiding,
@@ -372,10 +398,11 @@ export default function HypotheekCalculator() {
       aantalZichtbareJaren,
     });
   }, [
+    heeftPartner, startJaar, jijMaxUren, partnerMaxUren,
     spaargeldJij, spaargeldPartner, inlegPercentageJij,
     woningwaarde, buffer, hypotheekType, hypotheekProduct,
     energielabel, rentevastePeriode,
-    heeftPartner, brutoJaarJij, brutoJaarPartner,
+    brutoJaarJij, brutoJaarPartner,
     jijUrenNaMinderWerken, partnerUrenNaMinderWerken, promotieOpslag,
     jijMinderWerkenJaar, partnerMinderWerkenJaar, promotieJaar,
     jarenTotScheiding,
@@ -389,16 +416,26 @@ export default function HypotheekCalculator() {
     <main className="p-2 sm:p-4 max-w-[1600px] mx-auto space-y-4 text-sm">
       {/* Header */}
       <header className="border-b pb-3">
-        <h1 className="text-xl font-bold text-gray-800">Hypotheek Scenario Calculator</h1>
-        <p className="text-gray-500 text-xs mt-1">
-          {laatstBijgewerkt
-            ? `${Object.keys(providers).length} hypotheekproducten · Tarieven van ${new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`
-            : 'ASN Bank tarieven (fallback)'}{' '}
-          · Belastingtarieven {BELASTINGJAAR} · Inclusief NHG-premie, HRA en woningindexatie
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Hypotheek Scenario Calculator</h1>
+            <p className="text-gray-500 text-xs mt-1">
+              {laatstBijgewerkt
+                ? `${Object.keys(providers).length} hypotheekproducten · Tarieven van ${new Date(laatstBijgewerkt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                : 'ASN Bank tarieven (fallback)'}{' '}
+              · Belastingtarieven {BELASTINGJAAR} · Inclusief NHG-premie, HRA en woningindexatie
+            </p>
+          </div>
+          <button
+            onClick={() => setToonInstellingen(true)}
+            className="shrink-0 text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors mt-1"
+          >
+            Instellingen
+          </button>
+        </div>
         {isTariefVerouderd(laatstBijgewerkt) && (
           <p role="alert" className="text-xs mt-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded inline-block">
-            ⚠ Rentetarieven zijn {dagenOud(laatstBijgewerkt) ?? '?'} dagen oud — voer <code className="bg-yellow-200 px-1 rounded">npm run update-rentes</code> uit om bij te werken
+            ⚠ Rentetarieven zijn {dagenOud(laatstBijgewerkt) ?? '?'} dagen oud — tarieven worden normaal wekelijks bijgewerkt
           </p>
         )}
         {new Date().getFullYear() > BELASTINGJAAR && (

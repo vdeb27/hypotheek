@@ -2,6 +2,12 @@
 
 Een interactieve calculator voor het doorrekenen van hypotheekscenario's bij de aankoop van je eerste huis in Nederland.
 
+## Probeer het
+
+**[→ vdeb27.github.io/hypotheek-calculator](https://vdeb27.github.io/hypotheek-calculator/)**
+
+Geen installatie nodig. Alle gegevens worden alleen in jouw browser opgeslagen — er gaat niets naar de server of naar de ontwikkelaar.
+
 ## Voor wie is dit?
 
 Deze tool is gemaakt voor starters op de Nederlandse woningmarkt die willen begrijpen wat een hypotheek werkelijk kost. Je kunt er onder meer mee:
@@ -11,62 +17,9 @@ Deze tool is gemaakt voor starters op de Nederlandse woningmarkt die willen begr
 - **Maandlasten begrijpen**: inclusief gemeentelijke belastingen, verzekering, onderhoud en belastingvoordeel
 - **Betaalbaarheid toetsen**: woonquote en Nibud-norm vergelijking
 
-Alle berekeningen draaien lokaal in je browser. Er wordt geen data verstuurd naar externe servers.
+## Rentetarieven
 
-## Starten
-
-### 1. Dependencies installeren
-```bash
-cd app
-npm install
-```
-
-### 2. Persoonlijke configuratie aanmaken
-```bash
-cp src/user-config.example.json src/user-config.json
-```
-Open `src/user-config.json` in een teksteditor en vul je eigen gegevens in (woningwaarde, inkomen, spaargeld, gemeente, etc.). Dit bestand wordt **niet** meegenomen in git.
-
-### 3. Calculator starten
-```bash
-npm run dev
-```
-
-De calculator is dan beschikbaar op: **http://localhost:5173**
-
-Als je geen eigen configuratie aanmaakt, toont de calculator een welkomstscherm met instructies.
-
-## Configuratie
-
-Het bestand `src/user-config.json` bevat je persoonlijke financiele gegevens:
-
-| Veld | Beschrijving |
-|------|-------------|
-| `woningwaarde` | Aankoopprijs van de woning |
-| `buffer` | Spaargeld dat je achter de hand wilt houden |
-| `spaargeldJij` / `spaargeldPartner` | Beschikbaar spaargeld per persoon |
-| `inlegPercentageJij` | Jouw aandeel in de eigen inleg (percentage) |
-| `brutoJaarinkomenJij` / `brutoJaarinkomenPartner` | Toetsinkomen (bruto per jaar) |
-| `jijMaxUren` / `partnerMaxUren` | Fulltime werkuren per week |
-| `jijUrenNaMinderWerken` / `partnerUrenNaMinderWerken` | Uren bij minder werken scenario |
-| `promotieOpslagPercentage` | Verwachte bruto-opslag bij promotie |
-| `startJaar` | Jaar van aankoop |
-| `gemeente` | Gemeente voor OZB/gemeentelijke lasten |
-| `energielabel` | Energielabel van de woning (A t/m G) |
-| `opstalverzekeringMaand` | Opstalverzekering per maand |
-| `makelaarsKosten` | Kosten aankoopmakelaar |
-
-Bij alleen kopen: zet de partner-velden op `0`.
-
-## Rentetarieven bijwerken
-
-De calculator gebruikt actuele rentetarieven van Nederlandse hypotheekverstrekkers via de Hypotheekbond API. Deze tarieven zijn gecached in `src/providers/data/rates-cache.json`.
-
-```bash
-npm run update-rentes
-```
-
-Draai dit commando periodiek (bijv. maandelijks) om de tarieven actueel te houden. De calculator toont een waarschuwing als de tarieven ouder zijn dan 14 dagen.
+De calculator gebruikt actuele rentetarieven van Nederlandse hypotheekverstrekkers via de Hypotheekbond API. De tarieven worden automatisch elke week bijgewerkt via een GitHub Actions workflow en gecached in `app/src/providers/data/rates-cache.json`.
 
 ## Jaarlijks bijwerken
 
@@ -83,30 +36,31 @@ Werk ook de constanten `BELASTINGJAAR` en `GEMEENTE_TARIEVEN_JAAR` in `constants
 ## Development
 
 De calculator gebruikt:
-- **Vite 5** - Build tool
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
+- **Vite 5** — Build tool
+- **React 18** — UI framework
+- **TypeScript** — Type safety
+- **Tailwind CSS** — Styling
 
-Wijzigingen worden automatisch ververst in de browser (Hot Module Replacement).
-
-### Productie build maken
 ```bash
 cd app
-npm run build
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-### Tests draaien
+### Tests, linting & formatting
 ```bash
 npm run test          # Eenmalig
 npm run test:watch    # Watch mode
-```
-
-### Linting & formatting
-```bash
 npm run lint
 npm run format
 ```
+
+### Productie build
+```bash
+npm run build
+```
+
+Deployen gaat automatisch bij elke push naar `main` via `.github/workflows/deploy.yml`.
 
 ## Project structuur
 
@@ -120,31 +74,34 @@ hypotheek-calculator/
 │   │   ├── constants.ts          # Constanten (NHG, belasting, kosten)
 │   │   ├── belasting.ts          # Inkomstenbelasting berekening
 │   │   ├── gemeente-tarieven.ts  # Gemeentelijke belastingtarieven
-│   │   ├── user-config.json      # Persoonlijke configuratie (gitignored)
-│   │   ├── user-config.example.json  # Configuratie template
 │   │   ├── components/           # UI componenten
-│   │   │   ├── InvoerKolom.tsx       # Invoer (woning, kosten, woonlasten)
-│   │   │   ├── CarriereKolom.tsx     # Inkomen & scenario's
-│   │   │   ├── ResultatenKolom.tsx   # Berekende resultaten
+│   │   │   ├── ConfigOnboarding.tsx  # Welkomstscherm / instellingen
+│   │   │   ├── PersoonlijkKolom.tsx  # Inkomen & vermogen
+│   │   │   ├── WoningKolom.tsx       # Woning & kosten koper
+│   │   │   ├── HypotheekKolom.tsx    # Hypotheekproduct & rente
+│   │   │   ├── UitkomstenKolom.tsx   # Berekende resultaten
 │   │   │   ├── JaarlijkseTabel.tsx   # 30-jaar overzicht
-│   │   │   ├── Tooltip.tsx           # Info-tooltips
-│   │   │   └── ConfigOnboarding.tsx  # Welkomstscherm
+│   │   │   └── Tooltip.tsx           # Info-tooltips
 │   │   ├── lib/                  # Berekeningen & hulpfuncties
-│   │   │   ├── berekeningen.ts       # Financiele berekeningen
+│   │   │   ├── berekeningen.ts       # Financiële berekeningen
+│   │   │   ├── calculator-storage.ts # localStorage persistentie
 │   │   │   ├── formatters.ts         # Geld/percentage formatting
-│   │   │   ├── config-loader.ts      # Configuratie laden
-│   │   │   ├── staleness.ts          # Verouderingsdetectie
-│   │   │   └── woordenlijst.ts       # Uitleg vaktermen
+│   │   │   ├── config-loader.ts      # Standaardwaarden laden
+│   │   │   ├── staleness.ts          # Verouderingsdetectie tarieven
+│   │   │   └── nibud-normen.ts       # Nibud financieringslastnormen
 │   │   └── providers/            # Hypotheekverstrekker data
 │   ├── package.json
 │   └── vite.config.ts
 ├── scripts/
 │   └── fetch-rentes.ts           # Script om rentetarieven bij te werken
-├── CONTRIBUTING.md               # Bijdrage-instructies
+├── .github/workflows/
+│   ├── deploy.yml                # Automatisch deployen naar GitHub Pages
+│   └── update-rentes.yml         # Wekelijks rentetarieven bijwerken
+├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md
 ```
 
 ## Licentie
 
-MIT - zie [LICENSE](LICENSE) voor details.
+MIT — zie [LICENSE](LICENSE) voor details.

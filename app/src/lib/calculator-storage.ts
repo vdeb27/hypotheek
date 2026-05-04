@@ -27,6 +27,9 @@ export interface OpgeslagenState {
   opstalverzekeringMaand?: number;
   onderhoudspercentage?: number;
   aantalZichtbareJaren?: number;
+  jijMaxUren?: number;
+  partnerMaxUren?: number;
+  startJaar?: number;
 }
 
 export function laadOpgeslagenState(): OpgeslagenState | null {
