@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { providers, laatstBijgewerkt } from './providers';
-import { config, isDefaultConfig } from './lib/config-loader';
-import ConfigOnboarding, { type InstellingenWaarden } from './components/ConfigOnboarding';
+import { config } from './lib/config-loader';
 import { laadOpgeslagenState, slaStateOp } from './lib/calculator-storage';
 import { HRA_MAX_TARIEF } from './belasting';
 import { gemeenteTarieven } from './gemeente-tarieven';
@@ -41,42 +40,18 @@ import HypotheekKolom from './components/HypotheekKolom';
 import UitkomstenKolom from './components/UitkomstenKolom';
 import JaarlijkseTabel from './components/JaarlijkseTabel';
 
-export default function HypotheekCalculator() {
-  const [gebruikStandaard, setGebruikStandaard] = useState(false);
-  const [toonInstellingen, setToonInstellingen] = useState(false);
-  const [opgeslagen] = useState(() => laadOpgeslagenState());
+interface HypotheekCalculatorProps {
+  onInstellingen?: () => void;
+}
 
-  // Deze 4 waarden zijn instelbaar via de landingspagina én via de instellingen-knop.
-  // Ze staan vóór de conditional zodat handleBegin ze direct kan updaten.
-  const [heeftPartner, setHeeftPartner] = useState(
-    opgeslagen?.heeftPartner ?? (config.heeftPartner ?? config.brutoJaarinkomenPartner > 0)
-  );
-  const [startJaar, setStartJaar] = useState(opgeslagen?.startJaar ?? config.startJaar);
-  const [jijMaxUren, setJijMaxUren] = useState(opgeslagen?.jijMaxUren ?? config.jijMaxUren);
-  const [partnerMaxUren, setPartnerMaxUren] = useState(opgeslagen?.partnerMaxUren ?? config.partnerMaxUren);
+export default function HypotheekCalculator({ onInstellingen }: HypotheekCalculatorProps) {
+  const s = laadOpgeslagenState();
 
-  const toonLandingspagina = (isDefaultConfig && !gebruikStandaard && !opgeslagen) || toonInstellingen;
-
-  function handleBegin(waarden: InstellingenWaarden) {
-    setHeeftPartner(waarden.heeftPartner);
-    setStartJaar(waarden.startJaar);
-    setJijMaxUren(waarden.jijMaxUren);
-    setPartnerMaxUren(waarden.partnerMaxUren);
-    setGebruikStandaard(true);
-    setToonInstellingen(false);
-  }
-
-  if (toonLandingspagina) {
-    return (
-      <ConfigOnboarding
-        huidigeWaarden={{ heeftPartner, startJaar, jijMaxUren, partnerMaxUren }}
-        onBegin={handleBegin}
-        onSlaOver={() => { setGebruikStandaard(true); setToonInstellingen(false); }}
-      />
-    );
-  }
-
-  const s = opgeslagen;
+  // === HUISHOUDEN & BASISINSTELLINGEN (instelbaar via landingspagina) ===
+  const [heeftPartner, setHeeftPartner] = useState(s?.heeftPartner ?? (config.heeftPartner ?? config.brutoJaarinkomenPartner > 0));
+  const [startJaar] = useState(s?.startJaar ?? config.startJaar);
+  const [jijMaxUren] = useState(s?.jijMaxUren ?? config.jijMaxUren);
+  const [partnerMaxUren] = useState(s?.partnerMaxUren ?? config.partnerMaxUren);
 
   // === VERMOGEN ===
   const [spaargeldJij, setSpaargeldJij] = useState(s?.spaargeldJij ?? config.spaargeldJij);
@@ -427,7 +402,7 @@ export default function HypotheekCalculator() {
             </p>
           </div>
           <button
-            onClick={() => setToonInstellingen(true)}
+            onClick={onInstellingen}
             className="shrink-0 text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors mt-1"
           >
             Instellingen
